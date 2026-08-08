@@ -44,12 +44,24 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
     }
   }
 
-  /** Lets every bot whose turn it now is play out, then broadcasts everything that happened. */
-  function runBotsAndBroadcast(roomId: string, precedingEvents: GameEvent[] = []): void {
+  // processBotTurns caps how much work it does in one call so a degenerate room (e.g. every
+  // player just drawing 0 cards and ending their turn, in an exhausted-deck stretch) can't block
+  // the event loop for other rooms. Without resuming it, hitting that cap mid-bot-rotation left
+  // the game stuck forever on a bot's turn with nothing left to ever trigger another attempt —
+  // the client would just wait indefinitely for a turn that never came back around.
+  const MAX_BOT_CONTINUATION_CHAIN = 200;
+
+  /** Lets every bot whose turn it now is play out, resuming itself until a human needs to act
+   * or the game ends, then broadcasts everything that happened. */
+  function runBotsAndBroadcast(roomId: string, precedingEvents: GameEvent[] = [], chain = 0): void {
     const botEvents = roomManager.processBotTurns(roomId);
     const events = [...precedingEvents, ...botEvents];
     if (events.length > 0) io.to(roomId).emit('game:events', events);
     broadcastGameState(roomId);
+
+    if (roomManager.isBotTurn(roomId) && chain < MAX_BOT_CONTINUATION_CHAIN) {
+      setTimeout(() => runBotsAndBroadcast(roomId, [], chain + 1), 10);
+    }
   }
 
   io.on('connection', (socket) => {

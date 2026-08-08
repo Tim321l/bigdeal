@@ -4,6 +4,7 @@ import { BASE_ACTION_LIMIT } from '../../../src/engine/stateManager';
 import { PHASE_LABELS } from '../labels';
 import type { ActionPayload, Card, GameEvent, PlayCardTarget, RoomSummary, SanitizedGameState } from '../types';
 import { EventLog } from './EventLog';
+import { EventToast } from './EventToast';
 import { GameOverScreen } from './GameOverScreen';
 import { MacroEventBanner } from './MacroEventBanner';
 import { OpponentPanel } from './OpponentPanel';
@@ -61,6 +62,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
 
   return (
     <div className="game-board">
+      <EventToast events={recentEvents} nameOf={nameOf} />
       <header className="game-header">
         <div className="game-header__status">
           <span className="badge">{PHASE_LABELS[game.phase]}</span>

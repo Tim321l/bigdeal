@@ -112,6 +112,20 @@ describe('rent stacking through the full engine', () => {
     });
 
     expect(afterRent.nextState.pendingReaction?.amount).toBe(0);
+
+    // Accepting a $0 charge must still give clear feedback (a RENT_CHARGED event), not silently
+    // do nothing — that previously looked exactly like the app hadn't responded to the click.
+    const responded = applyAction(afterRent.nextState, {
+      type: 'RESPOND',
+      playerId: 'player-2',
+      response: 'ACCEPT',
+    });
+    expect(responded.events).toContainEqual({
+      type: 'RENT_CHARGED',
+      fromPlayerId: 'player-2',
+      toPlayerId: 'player-1',
+      amount: 0,
+    });
   });
 
   it('reuses the top rent tier when owning more than 3 copies of a color (colors now print 5)', () => {

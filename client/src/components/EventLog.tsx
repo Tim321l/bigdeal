@@ -19,7 +19,9 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
     case 'REACTION_RESOLVED':
       return `${nameOf(event.playerId)} ${event.response === 'JUST_SAY_NO' ? '打出封區!' : '接受咗'}`;
     case 'RENT_CHARGED':
-      return `${nameOf(event.fromPlayerId)} 俾咗 $${event.amount}M 畀 ${nameOf(event.toPlayerId)}`;
+      return event.amount === 0
+        ? `${nameOf(event.toPlayerId)} 想同 ${nameOf(event.fromPlayerId)} 收租,但而家冇嘢收得到(可能因為《賣地流標》未集齊套暫停收租)`
+        : `${nameOf(event.fromPlayerId)} 俾咗 $${event.amount}M 畀 ${nameOf(event.toPlayerId)}`;
     case 'RENT_MULTIPLIED':
       return `${nameOf(event.playerId)} 雙倍租金 x${event.multiplier}`;
     case 'PROPERTY_STOLEN':
@@ -41,7 +43,7 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
 
 export function EventLog({ events, nameOf }: { events: GameEvent[]; nameOf: (id: string) => string }) {
   if (events.length === 0) return null;
-  const recent = [...events].reverse().slice(0, 12);
+  const recent = [...events].reverse().slice(0, 20);
 
   return (
     <div className="event-log">

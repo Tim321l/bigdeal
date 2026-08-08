@@ -166,7 +166,12 @@ function chargePlayer(
   chosenCardIds: string[] | undefined,
   events: GameEvent[],
 ): void {
-  if (amount <= 0) return;
+  if (amount <= 0) {
+    // Still tell the player something happened (e.g. 賣地流標 zeroed an incomplete set's rent) —
+    // silently doing nothing here previously looked exactly like the game hadn't responded at all.
+    events.push({ type: 'RENT_CHARGED', fromPlayerId: payer.id, toPlayerId: receiver.id, amount: 0 });
+    return;
+  }
 
   const available = [...payer.bank, ...payer.hand];
   const totalAvailable = available.reduce((sum, card) => sum + card.value, 0);

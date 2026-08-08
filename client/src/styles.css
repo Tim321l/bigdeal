@@ -68,6 +68,53 @@ button {
   font-size: 0.9rem;
 }
 
+.event-toast {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  background: var(--bg-panel);
+  color: var(--ink);
+  border: 2px solid var(--gold);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 14px 20px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 420px;
+  width: calc(100% - 40px);
+  animation: event-toast-in 0.25s ease-out;
+}
+
+.event-toast__icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.event-toast strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.event-toast p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+@keyframes event-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* --- Buttons --- */
 
 .btn {

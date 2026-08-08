@@ -275,4 +275,53 @@ describe('bots', () => {
     const result = manager.submitIntent(room.id, botId, { type: 'DRAW', playerId: 'player-1' });
     expect(result).toEqual({ ok: false, error: 'You may only act as your own player.' });
   });
+
+  it('isBotTurn correctly identifies whose turn/reaction it is, including the alternating chained-封區 case', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    unwrap(manager.addBot(room.id, hostId, 3));
+    unwrap(manager.setReady(room.id, hostId, true));
+
+    // Fresh game: TURN_START, player-1 (the human host) is active.
+    expect(manager.isBotTurn(room.id)).toBe(false);
+  });
+
+  it(
+    'a long bot-driven game always reaches a conclusion — processBotTurns is never permanently ' +
+      'stuck mid-rotation even across its own per-call step cap (the bug behind "game stopped responding")',
+    () => {
+      const manager = new RoomManager();
+      const { room, lobbyId: hostId } = unwrap(manager.createRoom('Human', 'socket-human'));
+      unwrap(manager.addBot(room.id, hostId, 3));
+      const started = unwrap(manager.setReady(room.id, hostId, true));
+      expect(started.started).toBe(true);
+
+      // Simulates exactly what the server's setTimeout continuation chain does: keep calling
+      // processBotTurns (or feeding the human's simplest legal move) until the game concludes.
+      // If processBotTurns could get permanently stuck mid-bot-turn, this loop would never
+      // terminate and the test would time out — that IS the regression check.
+      const MAX_ITERATIONS = 500;
+      let iterations = 0;
+      let state = started.room.gameState!;
+
+      while (state.phase !== 'GAME_OVER' && iterations < MAX_ITERATIONS) {
+        iterations += 1;
+
+        if (manager.isBotTurn(room.id)) {
+          manager.processBotTurns(room.id);
+        } else if (state.phase === 'REACTION_WINDOW') {
+          unwrap(manager.submitIntent(room.id, hostId, { type: 'RESPOND', playerId: 'player-1', response: 'ACCEPT' }));
+        } else if (state.phase === 'TURN_START') {
+          unwrap(manager.submitIntent(room.id, hostId, { type: 'DRAW', playerId: 'player-1' }));
+        } else if (state.phase === 'ACTION') {
+          unwrap(manager.submitIntent(room.id, hostId, { type: 'END_TURN', playerId: 'player-1' }));
+        }
+
+        state = manager.getRoom(room.id)!.gameState!;
+      }
+
+      expect(state.phase).toBe('GAME_OVER');
+      expect(iterations).toBeLessThan(MAX_ITERATIONS);
+    },
+  );
 });

@@ -204,6 +204,20 @@ export class RoomManager {
     return allEvents;
   }
 
+  /**
+   * True if whoever needs to act right now (turn or reaction) is a bot. processBotTurns caps how
+   * much work it does per call (MAX_BOT_STEPS) so one degenerate room can't block the event loop
+   * for other rooms — callers use this to know whether to invoke it again to keep going, rather
+   * than assuming one call always reaches a human's turn or the game's end.
+   */
+  isBotTurn(roomId: string): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room || room.status !== 'IN_PROGRESS' || !room.gameState) return false;
+    const actorId = this.currentActorId(room.gameState);
+    if (!actorId) return false;
+    return !!room.players.find((p) => p.gamePlayerId === actorId)?.bot;
+  }
+
   private currentActorId(state: GameState): string | undefined {
     if (state.phase === 'REACTION_WINDOW') return state.pendingReaction?.currentResponderId;
     if (state.phase === 'TURN_START' || state.phase === 'ACTION') return state.players[state.activePlayerIndex]?.id;
