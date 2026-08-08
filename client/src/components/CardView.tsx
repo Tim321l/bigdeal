@@ -1,4 +1,5 @@
-import { ACTION_LABELS, COLOR_LABELS } from '../labels';
+import { useState } from 'react';
+import { ACTION_LABELS, COLOR_LABELS, describeCard } from '../labels';
 import type { Card } from '../types';
 import { ActionIcon, MoneyIcon, PropertyColorIcon } from './CardIcons';
 
@@ -25,6 +26,7 @@ function CardIcon({ card }: { card: Card }) {
 }
 
 export function CardView({ card, selected, disabled, onClick }: CardViewProps) {
+  const [showInfo, setShowInfo] = useState(false);
   const colorSlug = card.color ? card.color.toLowerCase().replace(/_/g, '-') : 'none';
   const classes = [
     'card',
@@ -45,12 +47,53 @@ export function CardView({ card, selected, disabled, onClick }: CardViewProps) {
 
   return (
     <div className={classes} {...interactiveProps}>
+      <button
+        type="button"
+        className="card__info-btn"
+        aria-label={`「${card.name}」係咩意思`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowInfo(true);
+        }}
+      >
+        ?
+      </button>
       <span className="card__value">${card.value}M</span>
       <span className="card__icon" aria-hidden="true">
         <CardIcon card={card} />
       </span>
       <span className="card__name">{card.name}</span>
       <span className="card__meta">{metaText(card)}</span>
+
+      {showInfo && (
+        <div
+          className="overlay"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowInfo(false);
+          }}
+        >
+          <div className="modal modal--card-info" onClick={(e) => e.stopPropagation()}>
+            <h3>{card.name}</h3>
+            <p className="card-info__meta">
+              {metaText(card)} · ${card.value}M
+            </p>
+            <p>{describeCard(card)}</p>
+            <div className="modal__footer">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowInfo(false);
+                }}
+              >
+                知道喇
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
         ? `${nameOf(event.playerId)} 想抽牌,但牌組同棄牌堆暫時都空咗(要等有人打牌先會有得抽)`
         : `${nameOf(event.playerId)} 抽咗 ${event.count} 張牌`;
     case 'MACRO_EVENT_TRIGGERED':
-      return `📰 觸發事件:${event.event.name}`;
+      return `📰 觸發事件:${event.event.name} — ${event.event.description}`;
     case 'MACRO_EVENT_EXPIRED':
       return '一個事件完結咗';
     case 'CARD_BANKED':

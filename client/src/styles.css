@@ -393,7 +393,13 @@ button {
   display: flex;
   gap: 6px;
   align-items: center;
-  cursor: help;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+.macro-event-chip:hover {
+  background: #ffe9ad;
 }
 
 .game-body {
@@ -530,6 +536,7 @@ button {
 /* --- Cards --- */
 
 .card {
+  position: relative;
   width: 84px;
   height: 130px;
   border-radius: 8px;
@@ -544,6 +551,35 @@ button {
   box-shadow: var(--shadow);
   user-select: none;
   flex-shrink: 0;
+}
+
+.card__info-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.25);
+  color: #ffffff;
+  font-size: 0.62rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card__info-btn:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal--card-info .card-info__meta {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  margin-top: -8px;
 }
 
 .card--clickable {
@@ -683,6 +719,9 @@ button {
 
 .modal {
   background: var(--bg-panel);
+  /* Explicit (not inherited) — CardView nests its info popover inside a .card, which sets
+     white text for on-card content; without this the popover text would be invisible. */
+  color: var(--ink);
   border-radius: var(--radius);
   padding: 24px;
   max-width: 480px;
