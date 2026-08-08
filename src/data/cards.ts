@@ -73,12 +73,19 @@ export const ACTION_CARDS: Card[] = [
   { id: 'action-debt-collector-2', name: '收數', type: 'ACTION', value: 3, actionType: 'DEBT_COLLECTOR' },
   { id: 'action-debt-collector-3', name: '收數', type: 'ACTION', value: 3, actionType: 'DEBT_COLLECTOR' },
 
+  // 4 colors can be improved (TRANSPORT can't — see NO_IMPROVEMENT_COLOR), each capped at one
+  // house + one hotel, so 5 house / 4 hotel gives enough supply for every player to plausibly
+  // land one of each on the sets they complete, instead of the cards running out too early.
   { id: 'action-house', name: '洋樓', type: 'ACTION', value: 3, actionType: 'HOUSE' },
   { id: 'action-house-2', name: '洋樓', type: 'ACTION', value: 3, actionType: 'HOUSE' },
   { id: 'action-house-3', name: '洋樓', type: 'ACTION', value: 3, actionType: 'HOUSE' },
+  { id: 'action-house-4', name: '洋樓', type: 'ACTION', value: 3, actionType: 'HOUSE' },
+  { id: 'action-house-5', name: '洋樓', type: 'ACTION', value: 3, actionType: 'HOUSE' },
 
   { id: 'action-hotel', name: '酒店', type: 'ACTION', value: 4, actionType: 'HOTEL' },
   { id: 'action-hotel-2', name: '酒店', type: 'ACTION', value: 4, actionType: 'HOTEL' },
+  { id: 'action-hotel-3', name: '酒店', type: 'ACTION', value: 4, actionType: 'HOTEL' },
+  { id: 'action-hotel-4', name: '酒店', type: 'ACTION', value: 4, actionType: 'HOTEL' },
 
   // 過龍 is the low-impact "draw 2" filler card — real Monopoly Deal prints 10 of it, by far
   // the most common action card, keeping the deck moving without much strategic weight.
