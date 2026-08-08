@@ -30,7 +30,7 @@ describe('DEBT_COLLECTOR (收數)', () => {
 
 describe('PASS_GO (過龍)', () => {
   it('draws 2 extra cards and still counts as one action', () => {
-    const passGo = cardById('action-pass-go');
+    const passGo = cardById('action-pass-go-1');
     const filler = cardById('rent-estate');
     const alice = makePlayer('player-1', 'Alice', { hand: [passGo, filler] });
     const state = makeState({

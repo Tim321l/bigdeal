@@ -390,7 +390,10 @@ function playRentCard(
 
   // 洋樓/酒店 attached to this set (see playActionCard's HOUSE/HOTEL cases) add a flat bonus on
   // top of the tiered property rent — they don't count as property cards for the tier lookup.
-  const tierRent = propertyCards[0]?.rentTiers?.[propertyCards.length - 1] ?? 0;
+  // Owning more cards of a color than rentTiers has entries for (colors now print more than
+  // COMPLETE_SET_SIZE copies) just reuses the top tier rather than reading past the array.
+  const tiers = propertyCards[0]?.rentTiers;
+  const tierRent = tiers?.[Math.min(propertyCards.length, tiers.length) - 1] ?? 0;
   const improvementBonus =
     (propertySet.some((c) => c.actionType === 'HOUSE') ? HOUSE_RENT_BONUS : 0) +
     (propertySet.some((c) => c.actionType === 'HOTEL') ? HOTEL_RENT_BONUS : 0);

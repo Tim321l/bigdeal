@@ -114,6 +114,29 @@ describe('rent stacking through the full engine', () => {
     expect(afterRent.nextState.pendingReaction?.amount).toBe(0);
   });
 
+  it('reuses the top rent tier when owning more than 3 copies of a color (colors now print 5)', () => {
+    const rentCard = cardById('rent-estate');
+    // ESTATE rentTiers are [2, 4, 6]; owning all 5 printed copies should still charge tier[2] = 6,
+    // not read past the array and silently fall back to 0.
+    const allFive = [
+      'estate-taikoo-shing',
+      'estate-mei-foo-sun-chuen',
+      'estate-city-one',
+      'estate-south-horizons',
+      'estate-kingswood-villas',
+    ].map(cardById);
+
+    const alice = makePlayer('player-1', 'Alice', {
+      hand: [rentCard],
+      field: { ...makeField(), ESTATE: allFive },
+    });
+    const bob = makePlayer('player-2', 'Bob', { bank: [cardById('commercial-k11'), cardById('commercial-pacific-place')] });
+    const state = makeState({ players: [alice, bob] });
+
+    const { nextState } = applyAction(state, { type: 'PLAY_CARD', playerId: 'player-1', cardId: rentCard.id });
+    expect(nextState.pendingReaction?.amount).toBe(6);
+  });
+
   it('folds multiple simultaneous RENT modifiers in array order', () => {
     const events: MacroEvent[] = [
       { id: 'e1', name: '', description: '', durationTurns: 1, modifiers: [{ target: 'RENT', operator: 'ADD', value: 2 }] },
