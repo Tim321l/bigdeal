@@ -1,0 +1,37 @@
+import type { SanitizedPlayer } from '../types';
+import { HiddenCard } from './CardView';
+import { PropertyField } from './PropertyField';
+
+interface OpponentPanelProps {
+  player: SanitizedPlayer;
+  isActive: boolean;
+  isConnected: boolean;
+  botLevel?: 1 | 2 | 3 | undefined;
+}
+
+export function OpponentPanel({ player, isActive, isConnected, botLevel }: OpponentPanelProps) {
+  const bankTotal = player.bank.reduce((sum, card) => sum + card.value, 0);
+
+  return (
+    <div className={`opponent-panel${isActive ? ' opponent-panel--active' : ''}`}>
+      <div className="opponent-panel__header">
+        <span className={`status-dot${isConnected ? ' status-dot--online' : ' status-dot--offline'}`} />
+        <span className="opponent-panel__name">
+          {botLevel ? '🤖 ' : ''}
+          {player.name}
+        </span>
+        {botLevel && <span className="badge badge--bot">Lv.{botLevel}</span>}
+        {isActive && <span className="badge badge--turn">行動中</span>}
+      </div>
+      <div className="opponent-panel__hand">
+        {Array.from({ length: player.handCount }, (_, i) => (
+          <HiddenCard key={i} />
+        ))}
+      </div>
+      <div className="opponent-panel__stat">
+        銀行 ${bankTotal}M · {player.bank.length} 張
+      </div>
+      <PropertyField field={player.field} />
+    </div>
+  );
+}

@@ -1,0 +1,37 @@
+{
+  "name": "bigdeal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hong Kong-themed Monopoly Deal web game with a dynamic random-event modifier system.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "typecheck:client": "tsc -p client/tsconfig.json",
+    "typecheck:all": "npm run typecheck && npm run typecheck:client",
+    "dev:server": "tsx watch src/server/main.ts",
+    "dev:client": "vite",
+    "build:client": "vite build",
+    "build:all": "npm run build && npm run build:client",
+    "start": "tsx src/server/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^4.7.0",
+    "playwright": "^1.62.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.21",
+    "vitest": "^2.0.5"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "tsx": "^4.23.11"
+  }
+}

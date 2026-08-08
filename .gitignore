@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-client/
+.env
+.env.local
+*.local
+
+# Personal Claude Code settings (permissions etc.), not project config.
+.claude/settings.local.json
+
+# Playwright browser binaries live outside the repo; test artifacts are throwaway.
+test-results/
+playwright-report/
