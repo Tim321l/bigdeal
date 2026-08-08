@@ -140,21 +140,54 @@ function grantMoney(state: GameState, player: Player, amount: number, events: Ga
   events.push({ type: 'CARD_BANKED', playerId: player.id, cardId: card.id, amount });
 }
 
-function chargePlayer(payer: Player, receiver: Player, amount: number, events: GameEvent[]): void {
-  if (amount <= 0) return;
-
-  const payable = [...payer.bank, ...payer.hand].sort((a, b) => a.value - b.value);
-  const paidIds = new Set<string>();
+/** Cheapest-first, just enough cards to cover (or exhaust everything if it isn't enough). */
+function autoPickPayment(available: Card[], amount: number): Card[] {
+  const sorted = [...available].sort((a, b) => a.value - b.value);
+  const picked: Card[] = [];
   let collected = 0;
-  for (const card of payable) {
+  for (const card of sorted) {
     if (collected >= amount) break;
-    paidIds.add(card.id);
+    picked.push(card);
     collected += card.value;
   }
+  return picked;
+}
+
+/**
+ * In real Monopoly Deal the PAYER chooses which of their own cards to hand over — they might
+ * give up a property they don't want rather than their cash. `chosenCardIds` carries that
+ * choice (from a human's RESPOND); a bot (or a stale/invalid selection) falls back to
+ * auto-picking the cheapest cards first, same as before this existed.
+ */
+function chargePlayer(
+  payer: Player,
+  receiver: Player,
+  amount: number,
+  chosenCardIds: string[] | undefined,
+  events: GameEvent[],
+): void {
+  if (amount <= 0) return;
+
+  const available = [...payer.bank, ...payer.hand];
+  const totalAvailable = available.reduce((sum, card) => sum + card.value, 0);
+  const requiredMinimum = Math.min(amount, totalAvailable);
+
+  let payable: Card[];
+  if (chosenCardIds && chosenCardIds.length > 0) {
+    const chosenSet = new Set(chosenCardIds);
+    const chosen = available.filter((card) => chosenSet.has(card.id));
+    const chosenTotal = chosen.reduce((sum, card) => sum + card.value, 0);
+    payable = chosenTotal >= requiredMinimum ? chosen : autoPickPayment(available, amount);
+  } else {
+    payable = autoPickPayment(available, amount);
+  }
+
+  const paidIds = new Set(payable.map((card) => card.id));
+  const collected = payable.reduce((sum, card) => sum + card.value, 0);
 
   payer.bank = payer.bank.filter((card) => !paidIds.has(card.id));
   payer.hand = payer.hand.filter((card) => !paidIds.has(card.id));
-  receiver.bank.push(...payable.filter((card) => paidIds.has(card.id)));
+  receiver.bank.push(...payable);
 
   events.push({ type: 'RENT_CHARGED', fromPlayerId: payer.id, toPlayerId: receiver.id, amount: collected });
 }
@@ -633,7 +666,7 @@ function handleRespond(
 
   if (!pending.cancelled) {
     const target = findPlayer(state, currentTargetId);
-    if (target) resolvePendingEffectForTarget(state, pending, target, events);
+    if (target) resolvePendingEffectForTarget(state, pending, target, action.paymentCardIds, events);
   }
   events.push({ type: 'REACTION_RESOLVED', playerId: responder.id, response: 'ACCEPT' });
 
@@ -657,20 +690,21 @@ function resolvePendingEffectForTarget(
   state: GameState,
   pending: PendingReaction,
   target: Player,
+  paymentCardIds: string[] | undefined,
   events: GameEvent[],
 ): void {
   const source = findPlayer(state, pending.sourcePlayerId);
   if (!source) return;
 
   if (pending.card.type === 'RENT') {
-    chargePlayer(target, source, pending.amount ?? 0, events);
+    chargePlayer(target, source, pending.amount ?? 0, paymentCardIds, events);
     return;
   }
 
   switch (pending.card.actionType) {
     case 'BIRTHDAY':
     case 'DEBT_COLLECTOR':
-      chargePlayer(target, source, pending.amount ?? pending.card.value, events);
+      chargePlayer(target, source, pending.amount ?? pending.card.value, paymentCardIds, events);
       return;
     case 'DEAL_BREAKER': {
       const color = pending.context?.color;

@@ -52,8 +52,8 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
     setTargetingCard(null);
   };
 
-  const respond = (response: 'ACCEPT' | 'JUST_SAY_NO'): void => {
-    onIntent({ type: 'RESPOND', playerId: myGamePlayerId, response });
+  const respond = (response: 'ACCEPT' | 'JUST_SAY_NO', paymentCardIds?: string[]): void => {
+    onIntent({ type: 'RESPOND', playerId: myGamePlayerId, response, paymentCardIds });
   };
 
   const winner = game.phase === 'GAME_OVER' ? game.winnerId : undefined;
@@ -129,6 +129,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
           pending={game.pendingReaction}
           sourceName={nameOf(game.pendingReaction.sourcePlayerId)}
           myHand={me.hand ?? []}
+          myBank={me.bank}
           onRespond={respond}
         />
       )}

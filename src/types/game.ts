@@ -111,7 +111,15 @@ export interface GameState {
 export type ActionPayload =
   | { type: 'DRAW'; playerId: string }
   | { type: 'PLAY_CARD'; playerId: string; cardId: string; asBank?: boolean; target?: PlayCardTarget }
-  | { type: 'RESPOND'; playerId: string; cardId?: string; response: 'ACCEPT' | 'JUST_SAY_NO' }
+  | {
+      type: 'RESPOND';
+      playerId: string;
+      cardId?: string;
+      response: 'ACCEPT' | 'JUST_SAY_NO';
+      /** Which of the responder's own bank/hand cards to pay a debt with, if any is owed.
+       * Omitted (e.g. by bots) falls back to auto-picking the cheapest cards first. */
+      paymentCardIds?: string[] | undefined;
+    }
   | { type: 'END_TURN'; playerId: string };
 
 export type GameEvent =
