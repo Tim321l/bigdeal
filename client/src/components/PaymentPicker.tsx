@@ -4,6 +4,9 @@ import { CardView } from './CardView';
 
 interface PaymentPickerProps {
   amount: number;
+  /** Who/why this payment is owed, e.g. "Alice 打出咗「屋苑租單」" — shown persistently so the
+   * payer doesn't lose track of it after the modal-to-modal transition from ReactionPrompt. */
+  context: string;
   bank: Card[];
   hand: Card[];
   onConfirm: (cardIds: string[]) => void;
@@ -13,7 +16,7 @@ interface PaymentPickerProps {
 /** Lets the payer pick which of their own cards to hand over, matching real Monopoly Deal rules
  * — you choose what to give up (maybe a property you don't want) rather than the game deciding
  * for you. Confirm is disabled until the selection covers the debt (or everything, if you can't). */
-export function PaymentPicker({ amount, bank, hand, onConfirm, onCancel }: PaymentPickerProps) {
+export function PaymentPicker({ amount, context, bank, hand, onConfirm, onCancel }: PaymentPickerProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const payable = [...bank, ...hand];
   const totalAvailable = payable.reduce((sum, card) => sum + card.value, 0);
@@ -34,6 +37,7 @@ export function PaymentPicker({ amount, bank, hand, onConfirm, onCancel }: Payme
     <div className="overlay">
       <div className="modal">
         <h3>要俾 ${amount}M——揀邊啲卡找數</h3>
+        <p className="card-info__meta">{context}</p>
         {payable.length === 0 ? (
           <p>你手頭同銀行都冇卡,唔使俾。</p>
         ) : (

@@ -27,6 +27,7 @@ export function ReactionPrompt({ pending, sourceName, myHand, myBank, onRespond 
     return (
       <PaymentPicker
         amount={amount}
+        context={`${sourceName} 打出咗「${pending.card.name}」`}
         bank={myBank}
         hand={myHand}
         onConfirm={(cardIds) => onRespond('ACCEPT', cardIds)}
