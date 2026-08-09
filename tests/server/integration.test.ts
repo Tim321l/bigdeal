@@ -202,13 +202,17 @@ describe('multiplayer room + game wire protocol', () => {
 
       // The human draws and ends their turn; the bot should then play its whole turn
       // automatically and hand control back, all without the human doing anything else.
+      // A random macro event (e.g. 八號風球/停牌一日's SKIP_TURN) can end the human's turn as a
+      // side effect of DRAW itself, before the explicit END_TURN call even runs — so TURN_ENDED
+      // for player-1 might land in either batch. Capture both rather than assuming which.
+      const eventsFromDraw = waitForGameEvents(human);
       await sendIntent(human, { type: 'DRAW', playerId: 'player-1' });
 
       const eventsFromEndTurnOnward = waitForGameEvents(human);
       const stateBackToHuman = waitForGameState(human);
       await sendIntent(human, { type: 'END_TURN', playerId: 'player-1' });
 
-      const events = await eventsFromEndTurnOnward;
+      const events = [...(await eventsFromDraw), ...(await eventsFromEndTurnOnward)];
       expect(events.some((e) => e.type === 'TURN_ENDED' && e.playerId === 'player-1')).toBe(true);
 
       const resumed = await stateBackToHuman;

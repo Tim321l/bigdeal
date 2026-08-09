@@ -1,4 +1,4 @@
-export type BoardTileKind = 'GO' | 'FREE' | 'AUCTION' | 'STORM' | 'PROPERTY';
+export type BoardTileKind = 'GO' | 'FREE' | 'AUCTION' | 'STORM' | 'RENOVATION' | 'PROPERTY';
 
 export interface BoardTile {
   position: number;
@@ -11,14 +11,15 @@ export interface BoardTile {
 /** REAL_BIG_DEAL mode only — a fixed 32-tile square loop (4 corners + 7 tiles/side), canonical
  * across every game (only *ownership* varies, not layout — like a real Monopoly board). The 28
  * edge tiles hold all 25 existing PROPERTY cards (5 colors x 5 each), grouped in contiguous
- * same-color runs per side, plus 3 extra AUCTION/STORM tiles so those trigger more than once
+ * same-color runs per side, plus an extra AUCTION tile and two 維修中 (RENOVATION) tiles — a
+ * Jail-equivalent that skips the landing player's next roll — so those trigger more than once
  * per lap around the board. */
 export const BOARD_TILES: BoardTile[] = [
   { position: 0, kind: 'GO' },
   { position: 1, kind: 'PROPERTY', cardId: 'public-housing-tin-shing-yuen' },
   { position: 2, kind: 'PROPERTY', cardId: 'public-housing-yau-oi-estate' },
   { position: 3, kind: 'PROPERTY', cardId: 'public-housing-ngau-tau-kok-lower-estate' },
-  { position: 4, kind: 'STORM' },
+  { position: 4, kind: 'RENOVATION' },
   { position: 5, kind: 'PROPERTY', cardId: 'public-housing-shek-lei-estate' },
   { position: 6, kind: 'PROPERTY', cardId: 'public-housing-choi-hung-estate' },
   { position: 7, kind: 'PROPERTY', cardId: 'tong-lau-apliu-street' },
@@ -34,7 +35,7 @@ export const BOARD_TILES: BoardTile[] = [
   { position: 17, kind: 'PROPERTY', cardId: 'estate-city-one' },
   { position: 18, kind: 'PROPERTY', cardId: 'estate-south-horizons' },
   { position: 19, kind: 'PROPERTY', cardId: 'estate-kingswood-villas' },
-  { position: 20, kind: 'STORM' },
+  { position: 20, kind: 'RENOVATION' },
   { position: 21, kind: 'PROPERTY', cardId: 'commercial-ifc' },
   { position: 22, kind: 'PROPERTY', cardId: 'commercial-k11' },
   { position: 23, kind: 'PROPERTY', cardId: 'commercial-sze-fan-road' },

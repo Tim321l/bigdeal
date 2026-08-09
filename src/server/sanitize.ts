@@ -22,6 +22,8 @@ export interface SanitizedPlayer {
   teamId?: number;
   /** REAL_BIG_DEAL only — public info, index into BOARD_TILES. */
   position?: number;
+  /** REAL_BIG_DEAL only — set by landing on a 維修中 tile, cleared on the skipped roll. */
+  skipNextRoll?: boolean;
 }
 
 /** AUCTION_DRAFT: the lot is public, but it's a BLIND auction — bid amounts stay server-side
@@ -69,6 +71,7 @@ function sanitizePlayer(player: Player, viewerPlayerId: string): SanitizedPlayer
     ...(player.eliminated ? { eliminated: true } : {}),
     ...(player.teamId !== undefined ? { teamId: player.teamId } : {}),
     ...(player.position !== undefined ? { position: player.position } : {}),
+    ...(player.skipNextRoll ? { skipNextRoll: true } : {}),
   };
 }
 

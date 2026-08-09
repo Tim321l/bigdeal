@@ -78,6 +78,10 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return `${nameOf(event.playerId)} 唔買第 ${event.tileIndex} 格地皮`;
     case 'TRANSIT_TELEPORTED':
       return `🚆 ${nameOf(event.playerId)} 搭去咗第 ${event.toPosition} 格交通基建`;
+    case 'RENOVATION_STARTED':
+      return `🚧 ${nameOf(event.playerId)} 踩中維修中地盤,下一次擲骰會被跳過`;
+    case 'RENOVATION_SKIPPED':
+      return `🚧 ${nameOf(event.playerId)} 嘅地盤仲喺度維修緊,呢次擲骰被跳過咗`;
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

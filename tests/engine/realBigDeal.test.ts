@@ -9,9 +9,10 @@ import { cardById, makeField, makePlayer, makeState } from './testUtils';
 // `positionBeforeRoll` below never has to wrap around past GO for a 1-6 roll — landing near GO
 // would otherwise silently grant a pass-go bonus and contaminate these tests' bank assertions.
 const PROPERTY_TILE = 10; // tong-lau-nga-tsin-wai-road (OLD_TONG_LAU, value $2M)
-const STORM_TILE = 20;
+const STORM_TILE = 16; // the one remaining STORM corner — position 20 is now RENOVATION
 const AUCTION_TILE = 12;
 const TRANSPORT_TILE = 27;
+const RENOVATION_TILE = 20;
 
 /** Computes the roll a given seed will actually produce, then backs out the start position that
  * lands exactly on `targetPosition` — deterministic and seed-agnostic, no guessing required. */
@@ -224,6 +225,34 @@ describe('REAL_BIG_DEAL mode', () => {
     const { nextState, events } = applyAction(state, { type: 'ROLL_DICE', playerId: 'player-1' });
     expect(events.some((e) => e.type === 'MACRO_EVENT_TRIGGERED')).toBe(true);
     expect(nextState.phase).toBe('TURN_START');
+  });
+
+  it('landing on a RENOVATION tile skips the player\'s next roll (Jail-equivalent), then clears', () => {
+    const seed = 13;
+    const startPosition = positionBeforeRoll(seed, RENOVATION_TILE);
+    const alice = makePlayer('player-1', 'Alice', { position: startPosition });
+    const bob = makePlayer('player-2', 'Bob', { position: 0 });
+    const state = makeState({ mode: 'REAL_BIG_DEAL', phase: 'ROLL', players: [alice, bob], rngSeed: seed });
+
+    const landed = applyAction(state, { type: 'ROLL_DICE', playerId: 'player-1' });
+    expect(landed.events).toContainEqual({ type: 'RENOVATION_STARTED', playerId: 'player-1' });
+    expect(landed.nextState.phase).toBe('TURN_START');
+    expect(landed.nextState.players[0]?.skipNextRoll).toBe(true);
+    expect(landed.nextState.players[0]?.position).toBe(RENOVATION_TILE); // didn't move further
+
+    // Next time it's Alice's turn again, rolling skips movement entirely instead of moving her.
+    const backToRoll = { ...landed.nextState, phase: 'ROLL' as const };
+    const skipped = applyAction(backToRoll, { type: 'ROLL_DICE', playerId: 'player-1' });
+    expect(skipped.events).toContainEqual({ type: 'RENOVATION_SKIPPED', playerId: 'player-1' });
+    expect(skipped.events.some((e) => e.type === 'DICE_ROLLED')).toBe(false);
+    expect(skipped.nextState.phase).toBe('TURN_START');
+    expect(skipped.nextState.players[0]?.skipNextRoll).toBe(false);
+    expect(skipped.nextState.players[0]?.position).toBe(RENOVATION_TILE); // still hasn't moved
+
+    // The flag is one-shot — a third roll behaves completely normally again.
+    const normalAgain = { ...skipped.nextState, phase: 'ROLL' as const };
+    const rolledNormally = applyAction(normalAgain, { type: 'ROLL_DICE', playerId: 'player-1' });
+    expect(rolledNormally.events.some((e) => e.type === 'DICE_ROLLED')).toBe(true);
   });
 
   it('landing on an unowned TRANSPORT tile: buying it opens a follow-up TRANSIT decision', () => {

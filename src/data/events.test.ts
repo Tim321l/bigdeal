@@ -7,8 +7,8 @@ describe('macro event data', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('has the 5 originally requested events plus 黑色暴雨警告', () => {
-    expect(MACRO_EVENTS).toHaveLength(6);
+  it('has the original 6 events plus the 8 added for more content variety', () => {
+    expect(MACRO_EVENTS).toHaveLength(14);
   });
 
   it('gives every event at least one modifier or special effect', () => {

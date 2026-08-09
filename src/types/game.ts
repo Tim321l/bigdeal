@@ -60,6 +60,9 @@ export interface Player {
   teamId?: number;
   /** REAL_BIG_DEAL only: index into BOARD_TILES (src/data/board.ts), starts at 0 (GO). */
   position?: number;
+  /** REAL_BIG_DEAL only: set by landing on a 維修中 (RENOVATION) tile — the next ROLL_DICE skips
+   * movement entirely (still draws/acts normally afterward) instead of rolling. */
+  skipNextRoll?: boolean;
 }
 
 /** CLASSIC: first to 3 complete sets wins. BATTLE_ROYALE: rent/money-demand amounts are doubled
@@ -253,6 +256,8 @@ export type GameEvent =
   | { type: 'TILE_PURCHASED'; playerId: string; tileIndex: number; price: number }
   | { type: 'TILE_DECLINED'; playerId: string; tileIndex: number }
   | { type: 'TRANSIT_TELEPORTED'; playerId: string; toPosition: number }
+  | { type: 'RENOVATION_STARTED'; playerId: string }
+  | { type: 'RENOVATION_SKIPPED'; playerId: string }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

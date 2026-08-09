@@ -677,6 +677,13 @@ function handleRollDice(
     return;
   }
 
+  if (activePlayer.skipNextRoll) {
+    activePlayer.skipNextRoll = false;
+    events.push({ type: 'RENOVATION_SKIPPED', playerId: activePlayer.id });
+    state.phase = 'TURN_START';
+    return;
+  }
+
   const rng = new PRNG(state.rngSeed);
   const roll = rng.nextInt(1, 6);
   state.rngSeed = rng.getState();
@@ -717,6 +724,13 @@ function resolveLanding(state: GameState, player: Player, events: GameEvent[]): 
 
   if (tile.kind === 'STORM') {
     maybeTriggerMacroEvent(state, events, true);
+    state.phase = 'TURN_START';
+    return;
+  }
+
+  if (tile.kind === 'RENOVATION') {
+    player.skipNextRoll = true;
+    events.push({ type: 'RENOVATION_STARTED', playerId: player.id });
     state.phase = 'TURN_START';
     return;
   }

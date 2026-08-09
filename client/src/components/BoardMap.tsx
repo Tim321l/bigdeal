@@ -6,11 +6,12 @@ import { PropertyColorIcon } from './CardIcons';
 /** Up to 5 seats (MAX_PLAYERS) — cycles if somehow exceeded, but never will. */
 const SEAT_COLORS = ['#c8102e', '#2f9e8f', '#7c4dbd', '#b8860b', '#3b6fd6'];
 
-const SPECIAL_TILE_INFO: Record<'GO' | 'FREE' | 'AUCTION' | 'STORM', { icon: string; name: string }> = {
+const SPECIAL_TILE_INFO: Record<'GO' | 'FREE' | 'AUCTION' | 'STORM' | 'RENOVATION', { icon: string; name: string }> = {
   GO: { icon: '🏁', name: '起點' },
   AUCTION: { icon: '🔨', name: '拍賣行' },
   STORM: { icon: '⛈️', name: '突發風暴區' },
   FREE: { icon: '🅿️', name: '自由地' },
+  RENOVATION: { icon: '🚧', name: '維修中' },
 };
 
 /** Places all 32 tiles around a 9x9 CSS grid loop: corners at (9,9)=GO, (9,1)=AUCTION,
@@ -119,6 +120,7 @@ export function BoardMap({ game, myGamePlayerId }: BoardMapProps) {
                 {p.name}
                 {p.id === myGamePlayerId ? '(你)' : ''}
                 {p.eliminated ? ' 💥' : ''}
+                {p.skipNextRoll ? ' 🚧' : ''}
               </span>
               <span className="board-legend__stat">
                 銀行 ${bankTotal}M · {propertyCount} 個地皮
