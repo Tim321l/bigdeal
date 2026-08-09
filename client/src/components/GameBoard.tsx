@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getEffectiveActionLimit } from '../../../src/engine/modifierPipeline';
 import { BASE_ACTION_LIMIT } from '../../../src/engine/stateManager';
 import { countPooledCompleteSets } from '../../../src/engine/winCondition';
 import { PHASE_LABELS } from '../labels';
-import type { ActionPayload, Card, GameEvent, PlayCardTarget, RoomSummary, SanitizedGameState } from '../types';
+import type { ActionPayload, Card, GameEvent, MatchResult, PlayCardTarget, RoomSummary, SanitizedGameState } from '../types';
 import { AuctionPanel } from './AuctionPanel';
 import { BoardMap } from './BoardMap';
 import { EventLog } from './EventLog';
@@ -23,11 +23,19 @@ interface GameBoardProps {
   myGamePlayerId: string;
   recentEvents: GameEvent[];
   onIntent: (action: ActionPayload) => void;
+  onFetchHistory: (roomId: string) => Promise<MatchResult[]>;
   onLeave: () => void;
 }
 
-export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, onLeave }: GameBoardProps) {
+export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, onFetchHistory, onLeave }: GameBoardProps) {
   const [targetingCard, setTargetingCard] = useState<Card | null>(null);
+  const [history, setHistory] = useState<MatchResult[]>([]);
+
+  const isGameOver = game.phase === 'GAME_OVER';
+  useEffect(() => {
+    if (!isGameOver || !room) return;
+    void onFetchHistory(room.id).then(setHistory);
+  }, [isGameOver, room, onFetchHistory]);
 
   const me = game.players.find((p) => p.id === myGamePlayerId);
   const opponents = game.players.filter((p) => p.id !== myGamePlayerId);
@@ -95,6 +103,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
             isMe={false}
             mode={game.mode}
             raidFailed={game.raidFailed ?? false}
+            history={history}
             onLeave={onLeave}
           />
         )}
@@ -329,6 +338,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
           isMe={isMyWin}
           mode={game.mode}
           raidFailed={game.raidFailed ?? false}
+          history={history}
           onLeave={onLeave}
         />
       )}

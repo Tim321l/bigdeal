@@ -34,6 +34,7 @@ export default function App() {
         myGamePlayerId={myGamePlayerId}
         recentEvents={recentEvents}
         onIntent={sendIntent}
+        onFetchHistory={getHistory}
         onLeave={leaveSession}
       />
     ) : room && myLobbyId ? (
@@ -44,7 +45,6 @@ export default function App() {
         onSetMode={setMode}
         onAddBot={addBot}
         onRemoveBot={removeBot}
-        onFetchHistory={getHistory}
         onLeave={leaveSession}
       />
     ) : isSpectating ? (

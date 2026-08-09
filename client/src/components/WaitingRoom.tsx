@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { GameMode, MatchResult, RoomSummary } from '../types';
+import { useState } from 'react';
+import type { GameMode, RoomSummary } from '../types';
 
 // Mirrors src/server/roomManager.ts's MAX_PLAYERS — duplicated rather than imported because that
 // module pulls in Node built-ins (node:crypto) that don't belong in a browser bundle.
@@ -27,35 +27,11 @@ interface WaitingRoomProps {
   onSetMode: (mode: GameMode) => void;
   onAddBot: (level: 1 | 2 | 3) => void;
   onRemoveBot: (botLobbyId: string) => void;
-  onFetchHistory: (roomId: string) => Promise<MatchResult[]>;
   onLeave: () => void;
 }
 
-export function WaitingRoom({
-  room,
-  myLobbyId,
-  onToggleReady,
-  onSetMode,
-  onAddBot,
-  onRemoveBot,
-  onFetchHistory,
-  onLeave,
-}: WaitingRoomProps) {
+export function WaitingRoom({ room, myLobbyId, onToggleReady, onSetMode, onAddBot, onRemoveBot, onLeave }: WaitingRoomProps) {
   const [botLevel, setBotLevel] = useState<1 | 2 | 3>(2);
-  const [history, setHistory] = useState<MatchResult[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void onFetchHistory(room.id).then((result) => {
-      if (!cancelled) setHistory(result);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // Deliberately re-fetches on room.status too (not just room.id) so a freshly-ended match
-    // shows up right away instead of needing a manual refresh — onFetchHistory itself is stable
-    // (a useCallback in useGameConnection) so it's safe to omit from the dependency list.
-  }, [room.id, room.status]);
   const me = room.players.find((p) => p.lobbyId === myLobbyId);
   const isHost = room.hostLobbyId === myLobbyId;
   const needsExactlyFour = room.mode === 'SYNDICATE';
@@ -163,21 +139,6 @@ export function WaitingRoom({
       <button type="button" className="btn btn--ghost btn--block" onClick={onLeave}>
         離開房間
       </button>
-
-      {history.length > 0 && (
-        <div className="match-history">
-          <h3>本房記錄</h3>
-          <ul className="match-history__list">
-            {[...history].reverse().map((result, index) => (
-              <li key={index} className="match-history__item">
-                <span className="match-history__mode">{GAME_MODE_LABELS[result.mode].split('(')[0]}</span>
-                <span className="match-history__winner">🏆 {result.winnerName}</span>
-                <span className="match-history__players">{result.playerNames.join('、')}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
