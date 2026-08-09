@@ -612,6 +612,10 @@ button {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
+  /* A grid item's automatic min-width is its content's min-content size by default, which for
+   * .hand (flex-wrap: nowrap once ≤480px) is its full unscrolled width — that blows out
+   * .game-body's single mobile column even though .hand itself already scrolls internally. */
+  min-width: 0;
 }
 
 .my-area__header {
@@ -983,6 +987,7 @@ button {
 .board-section {
   grid-column: 1 / -1;
   margin-bottom: 6px;
+  min-width: 0;
 }
 
 .board-wrap {
@@ -1002,6 +1007,7 @@ button {
   border-radius: var(--radius);
   padding: 3px;
   flex: 3 1 560px;
+  min-width: 0;
   aspect-ratio: 1 / 1;
   max-width: 720px;
 }
@@ -1236,6 +1242,13 @@ button {
   }
 
   .board-map {
+    /* .board-wrap switches to a column below turns the flex main axis vertical, so the
+     * desktop flex-basis (560px, meant as a width) would otherwise set height instead and
+     * aspect-ratio would square the width back up to match it, overflowing the viewport. An
+     * explicit width + auto flex-basis keeps the square sized from the actual available width. */
+    flex: 0 1 auto;
+    width: 100%;
+    max-width: 100%;
     grid-template-columns: repeat(9, minmax(26px, 1fr));
     grid-template-rows: repeat(9, minmax(26px, 1fr));
     font-size: 0.42rem;
