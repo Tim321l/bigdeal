@@ -176,6 +176,12 @@ function isNailHouseProtected(player: Player, color: PropertyColor): boolean {
   return player.field[color].some((card) => card.actionType === 'NAIL_HOUSE');
 }
 
+/** 世紀特大暴雨 (DISABLE_IMPROVEMENTS): while active, House/Hotel cards can't be played at all
+ * (checked here) and any already-attached bonus is skipped too (see computeSetRent). */
+function isImprovementsDisabled(state: GameState): boolean {
+  return state.activeMacroEvents.some((event) => event.specialEffects?.some((effect) => effect.effect === 'DISABLE_IMPROVEMENTS'));
+}
+
 /** Actual property-card count for a color — NOT `field[color].length`. House/Hotel only ever
  * attach to an already-complete set, so they never inflated that raw length past 3 on their own,
  * but 釘子戶 can attach to an INCOMPLETE set — so field[color].length alone can no longer be
@@ -221,14 +227,21 @@ function autoPickPayment(available: Card[], amount: number): Card[] {
 
 /** Tiered rent (by same-color property count) plus any House/Hotel flat bonus for one color's
  * field slice — shared by hand-played RENT cards and REAL_BIG_DEAL's landing-triggered board rent.
- * Exported so the client can show a live rent breakdown next to each property group. */
-export function computeSetRent(propertySet: Card[]): number {
+ * Exported so the client can show a live rent breakdown next to each property group.
+ * `activeMacroEvents` only matters for DISABLE_IMPROVEMENTS (世紀特大暴雨), which zeroes the
+ * House/Hotel bonus everywhere while active — defaults to none so callers that don't care about
+ * macro events (or the client, before it has that context) can omit it. */
+export function computeSetRent(propertySet: Card[], activeMacroEvents: MacroEvent[] = []): number {
   const propertyCards = propertySet.filter((c) => c.type === 'PROPERTY');
   const tiers = propertyCards[0]?.rentTiers;
   const tierRent = tiers?.[Math.min(propertyCards.length, tiers.length) - 1] ?? 0;
-  const improvementBonus =
-    (propertySet.some((c) => c.actionType === 'HOUSE') ? HOUSE_RENT_BONUS : 0) +
-    (propertySet.some((c) => c.actionType === 'HOTEL') ? HOTEL_RENT_BONUS : 0);
+  const improvementsDisabled = activeMacroEvents.some((event) =>
+    event.specialEffects?.some((effect) => effect.effect === 'DISABLE_IMPROVEMENTS'),
+  );
+  const improvementBonus = improvementsDisabled
+    ? 0
+    : (propertySet.some((c) => c.actionType === 'HOUSE') ? HOUSE_RENT_BONUS : 0) +
+      (propertySet.some((c) => c.actionType === 'HOTEL') ? HOTEL_RENT_BONUS : 0);
   return tierRent + improvementBonus;
 }
 
@@ -319,11 +332,46 @@ function endTurn(state: GameState, events: GameEvent[]): void {
 
   state.pendingRentMultiplier = undefined;
 
-  if (activePlayer.hand.length > HAND_LIMIT) {
-    const excess = activePlayer.hand.length - HAND_LIMIT;
-    const discarded = activePlayer.hand.splice(HAND_LIMIT, excess);
-    state.discardPile.push(...discarded);
-    events.push({ type: 'HAND_DISCARDED', playerId: activePlayer.id, count: discarded.length });
+  // 垃圾徵費實施 (HAND_FEE) lowers the effective hand limit and turns the usual free discard into
+  // a per-card bank fee, falling back to discarding that specific card only when the bank can't
+  // cover its fee — everyone else keeps the plain free-discard-down-to-7 behavior.
+  const handFeeEffect = state.activeMacroEvents
+    .flatMap((event) => event.specialEffects ?? [])
+    .find((effect): effect is Extract<SpecialEffect, { effect: 'HAND_FEE' }> => effect.effect === 'HAND_FEE');
+  const effectiveLimit = handFeeEffect?.limit ?? HAND_LIMIT;
+
+  if (activePlayer.hand.length > effectiveLimit) {
+    const excessCards = activePlayer.hand.slice(effectiveLimit);
+    if (handFeeEffect) {
+      let finedCount = 0;
+      let discardedCount = 0;
+      let amountPaid = 0;
+      const toDiscardFromHand: Card[] = [];
+      for (const excessCard of excessCards) {
+        const payment = autoPickPayment(activePlayer.bank, handFeeEffect.feePerCard);
+        const paymentTotal = payment.reduce((sum, c) => sum + c.value, 0);
+        if (paymentTotal >= handFeeEffect.feePerCard) {
+          const paidIds = new Set(payment.map((c) => c.id));
+          activePlayer.bank = activePlayer.bank.filter((c) => !paidIds.has(c.id));
+          state.discardPile.push(...payment);
+          amountPaid += paymentTotal;
+          finedCount += 1;
+        } else {
+          toDiscardFromHand.push(excessCard);
+          discardedCount += 1;
+        }
+      }
+      if (toDiscardFromHand.length > 0) {
+        const discardIds = new Set(toDiscardFromHand.map((c) => c.id));
+        activePlayer.hand = activePlayer.hand.filter((c) => !discardIds.has(c.id));
+        state.discardPile.push(...toDiscardFromHand);
+      }
+      events.push({ type: 'HAND_FEE_SETTLED', playerId: activePlayer.id, finedCount, discardedCount, amountPaid });
+    } else {
+      const discarded = activePlayer.hand.splice(effectiveLimit, excessCards.length);
+      state.discardPile.push(...discarded);
+      events.push({ type: 'HAND_DISCARDED', playerId: activePlayer.id, count: discarded.length });
+    }
   }
 
   events.push({ type: 'TURN_ENDED', playerId: activePlayer.id });
@@ -445,6 +493,42 @@ function applySpecialEffect(state: GameState, special: SpecialEffect, events: Ga
         }
       }
       state.rngSeed = rng.getState();
+      return false;
+    }
+    case 'DRAW_ALL':
+      for (const player of state.players) {
+        const drawn = drawCards(state, special.count);
+        player.hand.push(...drawn);
+        events.push({ type: 'CARDS_DRAWN', playerId: player.id, count: drawn.length });
+      }
+      return false;
+    // HAND_FEE and DISABLE_IMPROVEMENTS are continuous, not instant — checked directly off
+    // state.activeMacroEvents wherever they matter (endTurn, computeSetRent, the HOUSE/HOTEL
+    // guards) rather than doing anything the moment the event triggers.
+    case 'HAND_FEE':
+    case 'DISABLE_IMPROVEMENTS':
+      return false;
+    case 'SINGLE_SET_TAX': {
+      // 一手空置稅: whoever owns the most lone, incomplete single-property colors pays up —
+      // ties get charged all of them, and it's capped at whatever's in the bank (no elimination
+      // over a mere tax).
+      const counts = state.players.map((player) => ({
+        player,
+        singleSets: PROPERTY_COLORS.filter((color) => player.field[color].filter((c) => c.type === 'PROPERTY').length === 1)
+          .length,
+      }));
+      const maxSingleSets = Math.max(0, ...counts.map((c) => c.singleSets));
+      if (maxSingleSets > 0) {
+        for (const { player, singleSets } of counts) {
+          if (singleSets !== maxSingleSets) continue;
+          const payable = autoPickPayment(player.bank, special.amount);
+          const paidIds = new Set(payable.map((c) => c.id));
+          player.bank = player.bank.filter((c) => !paidIds.has(c.id));
+          state.discardPile.push(...payable);
+          const collected = payable.reduce((sum, c) => sum + c.value, 0);
+          events.push({ type: 'TAX_CHARGED', playerId: player.id, amount: collected });
+        }
+      }
       return false;
     }
   }
@@ -767,7 +851,7 @@ function resolveLanding(state: GameState, player: Player, events: GameEvent[]): 
   // Owned by another player — board rent. Simplification: the transit teleport/collect-rent perk
   // is only offered when landing doesn't cost you rent (unowned or self-owned) — paying rent on
   // someone else's transit hub doesn't also grant you a free ride.
-  const amount = computeSetRent(owner.field[color]);
+  const amount = computeSetRent(owner.field[color], state.activeMacroEvents);
   const boardRentCard: Card = {
     id: `board-rent-${state.turn}-${tile.position}`,
     name: `${card.name} 過路費`,
@@ -902,7 +986,7 @@ function handleCollectTransitRent(
     return;
   }
 
-  const amount = computeSetRent(transitSet);
+  const amount = computeSetRent(transitSet, state.activeMacroEvents);
   const opponentIds = state.players.filter((p) => isOpposingPlayer(state, activePlayer, p)).map((p) => p.id);
 
   state.pendingTileDecision = undefined;
@@ -1017,7 +1101,7 @@ function playRentCard(
   // top of the tiered property rent — they don't count as property cards for the tier lookup.
   // Owning more cards of a color than rentTiers has entries for (colors now print more than
   // COMPLETE_SET_SIZE copies) just reuses the top tier rather than reading past the array.
-  const baseRent = computeSetRent(propertySet);
+  const baseRent = computeSetRent(propertySet, state.activeMacroEvents);
   // 孖展炒樓 (DOUBLE_RENT) boosts the printed rent before macro-event modifiers apply on top,
   // e.g. $3M base * DOUBLE_RENT * 突發加息 (x0.5) = $3M, not $2M.
   const boostedBaseRent = baseRent * (state.pendingRentMultiplier ?? 1);
@@ -1168,6 +1252,11 @@ function playActionCard(
       return;
     }
     case 'HOUSE': {
+      if (isImprovementsDisabled(state)) {
+        player.hand.push(card);
+        invalid(events, 'Houses cannot be built while 世紀特大暴雨 disables improvements.');
+        return;
+      }
       const color = target?.color;
       const set = color ? player.field[color] : undefined;
       const isComplete = set ? set.filter((c) => c.type === 'PROPERTY').length >= COMPLETE_SET_SIZE : false;
@@ -1240,6 +1329,11 @@ function playActionCard(
       return;
     }
     case 'HOTEL': {
+      if (isImprovementsDisabled(state)) {
+        player.hand.push(card);
+        invalid(events, 'Hotels cannot be built while 世紀特大暴雨 disables improvements.');
+        return;
+      }
       const color = target?.color;
       const set = color ? player.field[color] : undefined;
       const hasHouse = set?.some((c) => c.actionType === 'HOUSE') ?? false;

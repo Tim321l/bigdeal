@@ -29,7 +29,7 @@ export function PropertyField({ field, onCardClick, selectedCardId, activeMacroE
       {nonEmptyColors.map((color) => {
         const cards = field[color];
         const complete = cards.length >= COMPLETE_SET_SIZE;
-        const baseRent = computeSetRent(cards);
+        const baseRent = computeSetRent(cards, activeMacroEvents);
         const effectiveRent = calculateEffectiveRent(baseRent, cards, activeMacroEvents);
         return (
           <div key={color} className={`property-group${complete ? ' property-group--complete' : ''}`}>

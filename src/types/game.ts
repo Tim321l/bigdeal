@@ -110,6 +110,9 @@ export interface Modifier {
   target: ModifierTarget;
   operator: ModifierOperator;
   value: number;
+  /** RENT modifiers only — when set, this modifier only applies to that one property color;
+   * omitted (the default for every existing event) means it applies to all rent globally. */
+  color?: PropertyColor;
 }
 
 export type SpecialEffect =
@@ -117,7 +120,11 @@ export type SpecialEffect =
   | { effect: 'DRAW_DEFENSIVE_CARDS'; count: number }
   | { effect: 'GRANT_BANK_ALL'; amount: number }
   | { effect: 'DISABLE_INCOMPLETE_SET_RENT' }
-  | { effect: 'DISCARD_RANDOM_ALL' };
+  | { effect: 'DISCARD_RANDOM_ALL' }
+  | { effect: 'DRAW_ALL'; count: number }
+  | { effect: 'HAND_FEE'; limit: number; feePerCard: number }
+  | { effect: 'DISABLE_IMPROVEMENTS' }
+  | { effect: 'SINGLE_SET_TAX'; amount: number };
 
 export interface MacroEvent {
   id: string;
@@ -258,6 +265,8 @@ export type GameEvent =
   | { type: 'TRANSIT_TELEPORTED'; playerId: string; toPosition: number }
   | { type: 'RENOVATION_STARTED'; playerId: string }
   | { type: 'RENOVATION_SKIPPED'; playerId: string }
+  | { type: 'HAND_FEE_SETTLED'; playerId: string; finedCount: number; discardedCount: number; amountPaid: number }
+  | { type: 'TAX_CHARGED'; playerId: string; amount: number }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

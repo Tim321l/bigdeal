@@ -82,6 +82,10 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return `🚧 ${nameOf(event.playerId)} 踩中維修中地盤,下一次擲骰會被跳過`;
     case 'RENOVATION_SKIPPED':
       return `🚧 ${nameOf(event.playerId)} 嘅地盤仲喺度維修緊,呢次擲骰被跳過咗`;
+    case 'HAND_FEE_SETTLED':
+      return `🗑️ ${nameOf(event.playerId)} 手牌太多,俾咗 $${event.amountPaid}M 垃圾徵費${event.discardedCount > 0 ? `,仲棄咗 ${event.discardedCount} 張` : ''}`;
+    case 'TAX_CHARGED':
+      return `🏛️ ${nameOf(event.playerId)} 持有最多零散物業,俾咗 $${event.amount}M 一手空置稅`;
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

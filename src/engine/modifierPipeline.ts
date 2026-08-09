@@ -1,8 +1,13 @@
 import { COMPLETE_SET_SIZE } from '../data/constants';
-import type { Card, MacroEvent, Modifier, ModifierTarget } from '../types/game';
+import type { Card, MacroEvent, Modifier, ModifierTarget, PropertyColor } from '../types/game';
 
-function getModifiersForTarget(activeEvents: MacroEvent[], target: ModifierTarget): Modifier[] {
-  return activeEvents.flatMap((event) => event.modifiers).filter((modifier) => modifier.target === target);
+/** `color` only matters for RENT modifiers — a modifier with no `color` set applies globally
+ * (every existing event before color-scoped ones were added); one with a `color` only applies
+ * when computing rent for that specific property color. */
+function getModifiersForTarget(activeEvents: MacroEvent[], target: ModifierTarget, color?: PropertyColor): Modifier[] {
+  return activeEvents
+    .flatMap((event) => event.modifiers)
+    .filter((modifier) => modifier.target === target && (!modifier.color || modifier.color === color));
 }
 
 function applyNumericModifiers(base: number, modifiers: Modifier[]): number {
@@ -31,7 +36,7 @@ export function calculateEffectiveRent(baseRent: number, propertySet: Card[], ac
   );
   if (disablesIncompleteSetRent && propertySet.length < COMPLETE_SET_SIZE) return 0;
 
-  const modifiers = getModifiersForTarget(activeEvents, 'RENT');
+  const modifiers = getModifiersForTarget(activeEvents, 'RENT', propertySet[0]?.color);
   const effective = applyNumericModifiers(baseRent, modifiers);
   return Math.max(0, Math.floor(effective));
 }

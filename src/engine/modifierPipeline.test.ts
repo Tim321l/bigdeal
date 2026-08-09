@@ -58,6 +58,40 @@ describe('calculateEffectiveRent', () => {
     expect(calculateEffectiveRent(4, twoCards, [disableIncompleteRent])).toBe(0);
     expect(calculateEffectiveRent(4, threeCards, [disableIncompleteRent])).toBe(4);
   });
+
+  it('only applies a color-scoped modifier to that specific color, leaving others untouched', () => {
+    const northernMetropolis: MacroEvent = {
+      id: 'northern-metropolis-plan',
+      name: '北部都會區規劃',
+      description: '',
+      durationTurns: 3,
+      modifiers: [
+        { target: 'RENT', operator: 'MULTIPLY', value: 2, color: 'PUBLIC_HOUSING' },
+        { target: 'RENT', operator: 'MULTIPLY', value: 0.5, color: 'COMMERCIAL_LUXURY' },
+      ],
+    };
+    const publicHousing: Card = { id: 'ph', name: 'ph', type: 'PROPERTY', value: 1, color: 'PUBLIC_HOUSING' };
+    const commercial: Card = { id: 'cl', name: 'cl', type: 'PROPERTY', value: 1, color: 'COMMERCIAL_LUXURY' };
+    const estate = property('a'); // color: ESTATE — not targeted by either color-scoped modifier
+
+    expect(calculateEffectiveRent(3, [publicHousing], [northernMetropolis])).toBe(6);
+    expect(calculateEffectiveRent(4, [commercial], [northernMetropolis])).toBe(2);
+    expect(calculateEffectiveRent(5, [estate], [northernMetropolis])).toBe(5);
+  });
+
+  it('still applies a global (no-color) modifier alongside an active color-scoped one', () => {
+    const global: MacroEvent = { ...rateHike }; // RENT MULTIPLY 0.5, no color — applies to everything
+    const scoped: MacroEvent = {
+      id: 'tourism-boom',
+      name: '自由行火熱',
+      description: '',
+      durationTurns: 3,
+      modifiers: [{ target: 'RENT', operator: 'ADD', value: 2, color: 'TRANSPORT' }],
+    };
+    const transport: Card = { id: 't', name: 't', type: 'PROPERTY', value: 1, color: 'TRANSPORT' };
+    // (4 + 2) * 0.5 = 3 — both the scoped ADD and the global MULTIPLY apply, in event order.
+    expect(calculateEffectiveRent(4, [transport], [scoped, global])).toBe(3);
+  });
 });
 
 describe('getEffectiveActionLimit', () => {

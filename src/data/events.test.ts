@@ -7,8 +7,8 @@ describe('macro event data', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('has the original 6 events plus the 8 added for more content variety', () => {
-    expect(MACRO_EVENTS).toHaveLength(14);
+  it('has the original 14 events plus the 6 added for more content variety', () => {
+    expect(MACRO_EVENTS).toHaveLength(20);
   });
 
   it('gives every event at least one modifier or special effect', () => {

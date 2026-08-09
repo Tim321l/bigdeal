@@ -313,14 +313,21 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
       return { type: 'PLAY_CARD', playerId: bot.id, cardId: birthday.id };
     }
 
-    const houseCard = hand.find((c) => c.actionType === 'HOUSE');
+    // 世紀特大暴雨 blocks House/Hotel plays entirely — same reasoning as the 釘子戶 guards above:
+    // an invalid play doesn't consume the action budget, so a deterministic bot would otherwise
+    // propose the exact same illegal move forever while this event is active.
+    const improvementsDisabled = state.activeMacroEvents.some((event) =>
+      event.specialEffects?.some((effect) => effect.effect === 'DISABLE_IMPROVEMENTS'),
+    );
+
+    const houseCard = improvementsDisabled ? undefined : hand.find((c) => c.actionType === 'HOUSE');
     const houseColor = houseCard ? eligibleHouseColor(bot) : undefined;
     if (houseCard && houseColor) {
       const target: PlayCardTarget = { playerId: bot.id, color: houseColor };
       return { type: 'PLAY_CARD', playerId: bot.id, cardId: houseCard.id, target };
     }
 
-    const hotelCard = hand.find((c) => c.actionType === 'HOTEL');
+    const hotelCard = improvementsDisabled ? undefined : hand.find((c) => c.actionType === 'HOTEL');
     const hotelColor = hotelCard ? eligibleHotelColor(bot) : undefined;
     if (hotelCard && hotelColor) {
       const target: PlayCardTarget = { playerId: bot.id, color: hotelColor };

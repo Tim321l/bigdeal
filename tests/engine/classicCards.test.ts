@@ -126,11 +126,11 @@ describe('HOUSE / HOTEL (洋樓 / 酒店)', () => {
 
 describe('黑色暴雨警告 (DISCARD_RANDOM_ALL)', () => {
   it('makes every player with cards discard exactly one when the event triggers', () => {
-    // Seed 15 is empirically the first seed where TURN_START's random roll triggers a macro
-    // event AND the follow-up pick lands on 黑色暴雨警告 specifically, out of the current 14-event
-    // pool. This seed is expected to need re-picking again whenever MACRO_EVENTS grows or shrinks
-    // — the pick is an index into the whole pool, so its size shifts what any given seed lands on.
-    const seed = 15;
+    // Seed 129 is empirically a seed where TURN_START's random roll triggers a macro event AND
+    // the follow-up pick lands on 黑色暴雨警告 specifically, out of the current 20-event pool.
+    // This seed is expected to need re-picking again whenever MACRO_EVENTS grows or shrinks —
+    // the pick is an index into the whole pool, so its size shifts what any given seed lands on.
+    const seed = 129;
     const alice = makePlayer('player-1', 'Alice', { hand: ['rent-estate', 'rent-transport'].map(cardById) });
     const bob = makePlayer('player-2', 'Bob', { hand: [cardById('action-double-rent')] });
     const state = makeState({
