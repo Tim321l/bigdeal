@@ -188,6 +188,32 @@ describe('REAL_BIG_DEAL mode', () => {
     expect(events.some((e) => e.type === 'AUCTION_STARTED')).toBe(true);
   });
 
+  it('players can actually bid on a spontaneous board auction and it resolves normally (regression: SUBMIT_BID once rejected REAL_BIG_DEAL outright)', () => {
+    const seed = 13;
+    const startPosition = positionBeforeRoll(seed, AUCTION_TILE);
+    const alice = makePlayer('player-1', 'Alice', { position: startPosition, bank: [cardById('money-4m-a')] });
+    const bob = makePlayer('player-2', 'Bob', { position: 0, bank: [cardById('money-1m-a')] });
+    const state = makeState({
+      mode: 'REAL_BIG_DEAL',
+      phase: 'ROLL',
+      players: [alice, bob],
+      rngSeed: seed,
+      deck: [cardById('money-1m-b'), cardById('money-1m-c'), cardById('money-1m-d')],
+    });
+
+    const rolled = applyAction(state, { type: 'ROLL_DICE', playerId: 'player-1' });
+    expect(rolled.nextState.phase).toBe('AUCTION');
+
+    const aliceBid = applyAction(rolled.nextState, { type: 'SUBMIT_BID', playerId: 'player-1', amount: 2 });
+    expect(aliceBid.events.some((e) => e.type === 'INVALID_ACTION')).toBe(false);
+    expect(aliceBid.events).toContainEqual({ type: 'BID_SUBMITTED', playerId: 'player-1' });
+
+    const bobBid = applyAction(aliceBid.nextState, { type: 'SUBMIT_BID', playerId: 'player-2', amount: 1 });
+    expect(bobBid.events.some((e) => e.type === 'AUCTION_RESOLVED')).toBe(true);
+    expect(bobBid.nextState.phase).toBe('ACTION');
+    expect(bobBid.nextState.players[0]?.hand.some((c) => c.id === 'money-1m-b')).toBe(true); // alice won
+  });
+
   it('landing on the STORM tile force-triggers a macro event', () => {
     const seed = 999; // wouldn't trigger under the normal 30% roll on a single check
     const startPosition = positionBeforeRoll(seed, STORM_TILE);
