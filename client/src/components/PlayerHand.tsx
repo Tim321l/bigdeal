@@ -8,11 +8,17 @@ interface PlayerHandProps {
   onPlayTargeted: (card: Card) => void;
 }
 
-const TARGETED_ACTIONS = new Set(['DEAL_BREAKER', 'SLY_DEAL', 'FORCED_DEAL', 'DEBT_COLLECTOR', 'HOUSE', 'HOTEL']);
+const TARGETED_ACTIONS = new Set(['DEAL_BREAKER', 'SLY_DEAL', 'FORCED_DEAL', 'DEBT_COLLECTOR', 'HOUSE', 'HOTEL', 'PICKPOCKET']);
+
+/** Wild rent cards (2+ eligible colors) need a color picked before playing; single-color rent
+ * cards don't and go straight through onPlay like before. */
+function isWildRent(card: Card): boolean {
+  return card.type === 'RENT' && !card.color && !!card.wildColors && card.wildColors.length > 0;
+}
 
 function primaryLabel(card: Card): string | null {
   if (card.type === 'PROPERTY') return '起樓';
-  if (card.type === 'RENT') return '收租';
+  if (card.type === 'RENT') return isWildRent(card) ? '收租(揀顏色)' : '收租';
   if (card.type === 'MONEY') return null; // its only use is banking, covered by the secondary button
   if (card.type === 'ACTION') {
     switch (card.actionType) {
@@ -28,6 +34,7 @@ function primaryLabel(card: Card): string | null {
       case 'DEBT_COLLECTOR':
       case 'HOUSE':
       case 'HOTEL':
+      case 'PICKPOCKET':
         return '使用(揀目標)';
       default:
         return '使用';
@@ -45,7 +52,7 @@ export function PlayerHand({ hand, canAct, onPlay, onPlayTargeted }: PlayerHandP
     <div className="hand">
       {hand.map((card) => {
         const label = primaryLabel(card);
-        const isTargeted = card.type === 'ACTION' && !!card.actionType && TARGETED_ACTIONS.has(card.actionType);
+        const isTargeted = (card.type === 'ACTION' && !!card.actionType && TARGETED_ACTIONS.has(card.actionType)) || isWildRent(card);
         return (
           <div key={card.id} className="hand-card">
             <CardView card={card} />

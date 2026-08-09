@@ -17,15 +17,21 @@ export type ActionType =
   | 'PASS_GO'
   | 'HOUSE'
   | 'HOTEL'
-  | 'DOUBLE_RENT';
+  | 'DOUBLE_RENT'
+  | 'PICKPOCKET';
 
 export interface Card {
   id: string;
   name: string;
   type: CardType;
   value: number;
-  /** PROPERTY: the color group this card belongs to. RENT: the color group it charges rent for. */
+  /** PROPERTY: the color group this card belongs to. RENT (single-color): the color it charges rent for. */
   color?: PropertyColor;
+  /** RENT (wild): the colors this card may charge rent for — the player picks one when playing it. */
+  wildColors?: PropertyColor[];
+  /** RENT (wild, defaults to 'ALL'): 'SINGLE' restricts a wild rent card to one chosen opponent
+   * instead of charging every opponent, matching the real game's fully-wild rent card. */
+  rentScope?: 'ALL' | 'SINGLE';
   /** Rent by count of same-color properties owned, indexed from 0 (tier for owning 1 card). */
   rentTiers?: number[];
   actionType?: ActionType;
@@ -136,6 +142,7 @@ export type GameEvent =
   | { type: 'SET_STOLEN'; fromPlayerId: string; toPlayerId: string; color: PropertyColor }
   | { type: 'PROPERTY_SWAPPED'; playerAId: string; playerBId: string; cardAId: string; cardBId: string }
   | { type: 'HAND_DISCARDED'; playerId: string; count: number }
+  | { type: 'HAND_CARD_STOLEN'; fromPlayerId: string; toPlayerId: string; success: boolean }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

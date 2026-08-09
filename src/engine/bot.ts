@@ -30,8 +30,20 @@ function buildableProperty(hand: Card[], field: Record<PropertyColor, Card[]>): 
   );
 }
 
-function playableRent(hand: Card[], field: Record<PropertyColor, Card[]>): Card | undefined {
-  return hand.find((c) => c.type === 'RENT' && c.color && field[c.color].some((f) => f.type === 'PROPERTY'));
+/** For a RENT card (single-color or wild), the first color it could charge for that the bot
+ * actually owns a property of — undefined if the bot can't use this card at all right now. */
+function playableRentColor(card: Card, field: Record<PropertyColor, Card[]>): PropertyColor | undefined {
+  const eligible = card.color ? [card.color] : (card.wildColors ?? []);
+  return eligible.find((color) => field[color].some((f) => f.type === 'PROPERTY'));
+}
+
+function playableRent(hand: Card[], field: Record<PropertyColor, Card[]>): { card: Card; color: PropertyColor } | undefined {
+  for (const card of hand) {
+    if (card.type !== 'RENT') continue;
+    const color = playableRentColor(card, field);
+    if (color) return { card, color };
+  }
+  return undefined;
 }
 
 function heldJustSayNo(hand: Card[]): Card | undefined {
@@ -132,14 +144,30 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
     return { type: 'PLAY_CARD', playerId: bot.id, cardId: buildable.id };
   }
 
+  const leader = findLeader(state, bot.id);
+
   if (level >= 2) {
     const doubleRent = hand.find((c) => c.actionType === 'DOUBLE_RENT');
     const rent = playableRent(hand, bot.field);
     if (doubleRent && rent && !state.pendingRentMultiplier) {
       return { type: 'PLAY_CARD', playerId: bot.id, cardId: doubleRent.id };
     }
+    if (rent && rent.card.color) {
+      // Single-color rent card: no target needed, charges every opponent automatically.
+      return { type: 'PLAY_CARD', playerId: bot.id, cardId: rent.card.id };
+    }
+    if (rent && rent.card.rentScope === 'SINGLE') {
+      // Fully-wild rent only hits one opponent — aim it at whoever's winning.
+      const victim = leader ?? state.players.find((p) => p.id !== bot.id);
+      if (victim) {
+        const target: PlayCardTarget = { playerId: victim.id, color: rent.color };
+        return { type: 'PLAY_CARD', playerId: bot.id, cardId: rent.card.id, target };
+      }
+    }
     if (rent) {
-      return { type: 'PLAY_CARD', playerId: bot.id, cardId: rent.id };
+      // 2-color wild rent still charges every opponent — target carries the chosen color only.
+      const target: PlayCardTarget = { playerId: bot.id, color: rent.color };
+      return { type: 'PLAY_CARD', playerId: bot.id, cardId: rent.card.id, target };
     }
 
     const birthday = hand.find((c) => c.actionType === 'BIRTHDAY');
@@ -166,7 +194,6 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
       return { type: 'PLAY_CARD', playerId: bot.id, cardId: passGo.id };
     }
 
-    const leader = findLeader(state, bot.id);
     if (leader) {
       const dealBreaker = hand.find((c) => c.actionType === 'DEAL_BREAKER');
       const dealBreakerColor = dealBreaker ? completeSetColor(leader) : undefined;
@@ -187,6 +214,12 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
         if (debtCollector) {
           const target: PlayCardTarget = { playerId: leader.id };
           return { type: 'PLAY_CARD', playerId: bot.id, cardId: debtCollector.id, target };
+        }
+
+        const pickpocket = hand.find((c) => c.actionType === 'PICKPOCKET');
+        if (pickpocket) {
+          const target: PlayCardTarget = { playerId: leader.id };
+          return { type: 'PLAY_CARD', playerId: bot.id, cardId: pickpocket.id, target };
         }
       }
     }

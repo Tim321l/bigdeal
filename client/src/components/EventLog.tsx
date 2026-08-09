@@ -32,6 +32,10 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return `${nameOf(event.playerAId)} 同 ${nameOf(event.playerBId)} 交換咗物業`;
     case 'HAND_DISCARDED':
       return `${nameOf(event.playerId)} 棄咗 ${event.count} 張牌`;
+    case 'HAND_CARD_STOLEN':
+      return event.success
+        ? `${nameOf(event.toPlayerId)} 打荷包,由 ${nameOf(event.fromPlayerId)} 度偷咗一張手牌`
+        : `${nameOf(event.toPlayerId)} 想打荷包,但 ${nameOf(event.fromPlayerId)} 手牌係空嘅`;
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

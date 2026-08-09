@@ -45,6 +45,7 @@ describe('card data', () => {
         'HOUSE',
         'JUST_SAY_NO',
         'PASS_GO',
+        'PICKPOCKET',
         'SLY_DEAL',
       ].sort(),
     );

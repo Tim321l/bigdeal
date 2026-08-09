@@ -19,6 +19,7 @@ export const ACTION_LABELS: Record<ActionType, string> = {
   HOUSE: '洋樓',
   HOTEL: '酒店',
   DOUBLE_RENT: '孖展炒樓',
+  PICKPOCKET: '打荷包',
 };
 
 export const PHASE_LABELS: Record<TurnPhase, string> = {
@@ -41,6 +42,7 @@ export const ACTION_DESCRIPTIONS: Record<ActionType, string> = {
   HOTEL: '裝喺已經有洋樓嘅套度,之後嗰套收租再 +$4M。',
   DOUBLE_RENT: '令你今個回合出嘅下一張租單金額變雙倍。',
   JUST_SAY_NO: '唯一可以拒絕對手招式嘅方法——輪到你回應嗰陣打出嚟可以抵消件事(包括收租、搶樓)。冇呢張卡就乜都要接受。',
+  PICKPOCKET: '揀一位對手,隨機由佢手牌摸走一張(唔係物業,係手牌本身)。',
 };
 
 /** Full plain-language description of any card, for a click-to-explain popover. */
@@ -50,6 +52,12 @@ export function describeCard(card: Card): string {
   }
   if (card.type === 'RENT' && card.color) {
     return `打出嚟即時同所有對手收「${COLOR_LABELS[card.color]}」嘅租,金額按你自己擁有幾多張嗰種顏色計。`;
+  }
+  if (card.type === 'RENT' && card.wildColors) {
+    const colorNames = card.wildColors.map((c) => COLOR_LABELS[c]).join('、');
+    return card.rentScope === 'SINGLE'
+      ? `萬能租單——揀一位對手同任何一種顏色(${colorNames}),淨係向嗰位對手收租。`
+      : `通用租單——打出時揀「${colorNames}」其中一種顏色,同所有對手收嗰種顏色嘅租。`;
   }
   if (card.type === 'MONEY') {
     return '純現金,冇特殊能力,存入銀行等於面值。';

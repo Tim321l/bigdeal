@@ -52,6 +52,55 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
   const opponents = game.players.filter((p) => p.id !== myGamePlayerId);
   const opponent = opponents.find((p) => p.id === opponentId) ?? null;
 
+  // Wild RENT cards: pick a color from the card's eligible colors that you actually own
+  // property of; fully-wild (rentScope 'SINGLE') ones also need one opponent chosen first.
+  if (card.type === 'RENT' && card.wildColors) {
+    const myEligibleColors = card.wildColors.filter((color) => {
+      const propertyCount = (me?.field[color] ?? []).filter((c) => c.type === 'PROPERTY').length;
+      return propertyCount > 0;
+    });
+
+    const colorPicker = (targetPlayerId: string, onBack?: () => void) => (
+      <PickerShell title={`使用「${card.name}」— 揀收邊種顏色嘅租`} {...(onBack ? { onBack } : {})} onCancel={onCancel}>
+        {myEligibleColors.length === 0 ? (
+          <p>你自己未有呢張卡涵蓋嘅任何顏色物業。</p>
+        ) : (
+          <div className="modal__list">
+            {myEligibleColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className="btn btn--block"
+                onClick={() => onConfirm({ playerId: targetPlayerId, color })}
+              >
+                {COLOR_LABELS[color]}
+              </button>
+            ))}
+          </div>
+        )}
+      </PickerShell>
+    );
+
+    if (card.rentScope === 'SINGLE') {
+      if (!opponent) {
+        return (
+          <PickerShell title={`使用「${card.name}」— 揀一位對手`} onCancel={onCancel}>
+            <div className="modal__list">
+              {opponents.map((p) => (
+                <button key={p.id} type="button" className="btn btn--block" onClick={() => setOpponentId(p.id)}>
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </PickerShell>
+        );
+      }
+      return colorPicker(opponent.id, () => setOpponentId(null));
+    }
+
+    return colorPicker(myGamePlayerId);
+  }
+
   // 洋樓/酒店 go on one of YOUR OWN sets — no opponent involved at all.
   if (card.actionType === 'HOUSE' || card.actionType === 'HOTEL') {
     const eligibleColors = PROPERTY_COLORS.filter((color) => {
@@ -95,7 +144,11 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
               key={p.id}
               type="button"
               className="btn btn--block"
-              onClick={() => (card.actionType === 'DEBT_COLLECTOR' ? onConfirm({ playerId: p.id }) : setOpponentId(p.id))}
+              onClick={() =>
+                card.actionType === 'DEBT_COLLECTOR' || card.actionType === 'PICKPOCKET'
+                  ? onConfirm({ playerId: p.id })
+                  : setOpponentId(p.id)
+              }
             >
               {p.name}
             </button>

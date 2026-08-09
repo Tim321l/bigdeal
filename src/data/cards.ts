@@ -73,6 +73,13 @@ export const ACTION_CARDS: Card[] = [
   { id: 'action-debt-collector-2', name: '收數', type: 'ACTION', value: 3, actionType: 'DEBT_COLLECTOR' },
   { id: 'action-debt-collector-3', name: '收數', type: 'ACTION', value: 3, actionType: 'DEBT_COLLECTOR' },
 
+  // Original card, not from real Monopoly Deal: steals a random HAND card (not a property) off
+  // an opponent — a completely different resource from every other action card, which all move
+  // property or money instead of hand cards.
+  { id: 'action-pickpocket', name: '打荷包', type: 'ACTION', value: 3, actionType: 'PICKPOCKET' },
+  { id: 'action-pickpocket-2', name: '打荷包', type: 'ACTION', value: 3, actionType: 'PICKPOCKET' },
+  { id: 'action-pickpocket-3', name: '打荷包', type: 'ACTION', value: 3, actionType: 'PICKPOCKET' },
+
   // 4 colors can be improved (TRANSPORT can't — see NO_IMPROVEMENT_COLOR), each capped at one
   // house + one hotel. Bumped again (5->8 house, 4->6 hotel) since even the first bump still felt
   // scarce across a full multiplayer game sharing one draw pool.
@@ -108,8 +115,8 @@ export const ACTION_CARDS: Card[] = [
 
 // RENT cards let the active player charge rent for a color they own; the amount is looked up
 // from their own property cards' rentTiers (see stateManager.ts), not stored on the RENT card.
-// 3 copies per color — real Monopoly Deal's rent cards are 2-color wilds (13 total across 10
-// colors); ours are single-color, so 3 copies × 5 colors keeps a comparable per-color supply.
+// 3 single-color copies per color, plus wild cards below (2-color and fully-wild) matching real
+// Monopoly Deal's rent-card design more closely than single-color-only did.
 export const RENT_CARDS: Card[] = [
   { id: 'rent-public-housing', name: '公屋租單', type: 'RENT', value: 1, color: 'PUBLIC_HOUSING' },
   { id: 'rent-public-housing-2', name: '公屋租單', type: 'RENT', value: 1, color: 'PUBLIC_HOUSING' },
@@ -126,6 +133,33 @@ export const RENT_CARDS: Card[] = [
   { id: 'rent-transport', name: '交通租單', type: 'RENT', value: 1, color: 'TRANSPORT' },
   { id: 'rent-transport-2', name: '交通租單', type: 'RENT', value: 1, color: 'TRANSPORT' },
   { id: 'rent-transport-3', name: '交通租單', type: 'RENT', value: 1, color: 'TRANSPORT' },
+
+  // Wild rent cards, matching real Monopoly Deal's 2-color and fully-wild rent cards: the player
+  // picks which of the printed colors to charge for when playing one (see playRentCard). Cheaper
+  // to draw into than hoping for the exact single-color rent card you need.
+  { id: 'rent-wild-housing-tonglau', name: '公屋/唐樓通用租單', type: 'RENT', value: 3, wildColors: ['PUBLIC_HOUSING', 'OLD_TONG_LAU'] },
+  { id: 'rent-wild-tonglau-estate', name: '唐樓/屋苑通用租單', type: 'RENT', value: 3, wildColors: ['OLD_TONG_LAU', 'ESTATE'] },
+  { id: 'rent-wild-estate-commercial', name: '屋苑/豪宅通用租單', type: 'RENT', value: 3, wildColors: ['ESTATE', 'COMMERCIAL_LUXURY'] },
+  { id: 'rent-wild-commercial-transport', name: '豪宅/交通通用租單', type: 'RENT', value: 3, wildColors: ['COMMERCIAL_LUXURY', 'TRANSPORT'] },
+  { id: 'rent-wild-transport-housing', name: '交通/公屋通用租單', type: 'RENT', value: 3, wildColors: ['TRANSPORT', 'PUBLIC_HOUSING'] },
+
+  // Fully-wild: any one color, but only one victim instead of every opponent.
+  {
+    id: 'rent-wild-universal-1',
+    name: '萬能租單',
+    type: 'RENT',
+    value: 4,
+    rentScope: 'SINGLE',
+    wildColors: ['PUBLIC_HOUSING', 'OLD_TONG_LAU', 'ESTATE', 'COMMERCIAL_LUXURY', 'TRANSPORT'],
+  },
+  {
+    id: 'rent-wild-universal-2',
+    name: '萬能租單',
+    type: 'RENT',
+    value: 4,
+    rentScope: 'SINGLE',
+    wildColors: ['PUBLIC_HOUSING', 'OLD_TONG_LAU', 'ESTATE', 'COMMERCIAL_LUXURY', 'TRANSPORT'],
+  },
 ];
 
 // Plain cash padding for the deck — CardType.MONEY existed from Phase 1 but had zero concrete

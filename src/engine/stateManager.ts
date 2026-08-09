@@ -411,10 +411,18 @@ function playRentCard(
   target: PlayCardTarget | undefined,
   events: GameEvent[],
 ): void {
-  const color = card.color;
+  // Single-color rent cards fix their color; wild rent cards (see cards.ts) print 2+ eligible
+  // colors and let the player choose one via target.color when playing.
+  const eligibleColors = card.color ? [card.color] : (card.wildColors ?? []);
+  const color =
+    eligibleColors.length === 1
+      ? eligibleColors[0]
+      : target?.color && eligibleColors.includes(target.color)
+        ? target.color
+        : undefined;
   if (!color) {
     player.hand.push(card);
-    invalid(events, 'Rent card missing a color.');
+    invalid(events, eligibleColors.length > 1 ? 'Choose which color to charge rent for.' : 'Rent card missing a color.');
     return;
   }
 
@@ -424,6 +432,18 @@ function playRentCard(
     player.hand.push(card);
     invalid(events, 'You do not own any properties of that color.');
     return;
+  }
+
+  // Fully-wild rent cards (rentScope 'SINGLE') are stronger — any color, but only one victim —
+  // so unlike normal/pair-wild rent they can't fall back to "charge everyone".
+  let singleOpponent: Player | undefined;
+  if (card.rentScope === 'SINGLE') {
+    singleOpponent = resolveOpponent(state, player, target);
+    if (!singleOpponent) {
+      player.hand.push(card);
+      invalid(events, 'This rent card must target a single opponent.');
+      return;
+    }
   }
 
   // 洋樓/酒店 attached to this set (see playActionCard's HOUSE/HOTEL cases) add a flat bonus on
@@ -445,8 +465,9 @@ function playRentCard(
   state.discardPile.push(card);
   state.actionsPlayedThisTurn += 1;
 
-  const targetQueue =
-    target?.playerId && target.playerId !== player.id
+  const targetQueue = singleOpponent
+    ? [singleOpponent.id]
+    : target?.playerId && target.playerId !== player.id
       ? [target.playerId]
       : state.players.filter((p) => p.id !== player.id).map((p) => p.id);
 
@@ -556,6 +577,18 @@ function playActionCard(
         { card, sourcePlayerId: player.id, targetQueue: [opponent.id], amount: DEBT_COLLECTOR_AMOUNT },
         events,
       );
+      return;
+    }
+    case 'PICKPOCKET': {
+      const opponent = resolveOpponent(state, player, target);
+      if (!opponent) {
+        player.hand.push(card);
+        invalid(events, 'Pickpocket requires targeting an opponent.');
+        return;
+      }
+      state.discardPile.push(card);
+      state.actionsPlayedThisTurn += 1;
+      openReactionWindow(state, { card, sourcePlayerId: player.id, targetQueue: [opponent.id] }, events);
       return;
     }
     case 'HOUSE': {
@@ -711,6 +744,19 @@ function resolvePendingEffectForTarget(
     case 'DEBT_COLLECTOR':
       chargePlayer(target, source, pending.amount ?? pending.card.value, paymentCardIds, events);
       return;
+    case 'PICKPOCKET': {
+      if (target.hand.length === 0) {
+        events.push({ type: 'HAND_CARD_STOLEN', fromPlayerId: target.id, toPlayerId: source.id, success: false });
+        return;
+      }
+      const rng = new PRNG(state.rngSeed);
+      const index = rng.nextInt(0, target.hand.length - 1);
+      state.rngSeed = rng.getState();
+      const [stolen] = target.hand.splice(index, 1);
+      if (stolen) source.hand.push(stolen);
+      events.push({ type: 'HAND_CARD_STOLEN', fromPlayerId: target.id, toPlayerId: source.id, success: true });
+      return;
+    }
     case 'DEAL_BREAKER': {
       const color = pending.context?.color;
       if (!color) return;
