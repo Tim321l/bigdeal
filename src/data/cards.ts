@@ -80,6 +80,22 @@ export const ACTION_CARDS: Card[] = [
   { id: 'action-pickpocket-2', name: '打荷包', type: 'ACTION', value: 3, actionType: 'PICKPOCKET' },
   { id: 'action-pickpocket-3', name: '打荷包', type: 'ACTION', value: 3, actionType: 'PICKPOCKET' },
 
+  // Balance pass: original cards sharing 封區's defensive load, and countering the HOUSE+HOTEL
+  // (+$7M) snowball. See stateManager.ts for exactly what each protects against.
+  { id: 'action-nail-house', name: '釘子戶', type: 'ACTION', value: 3, actionType: 'NAIL_HOUSE' },
+  { id: 'action-nail-house-2', name: '釘子戶', type: 'ACTION', value: 3, actionType: 'NAIL_HOUSE' },
+  { id: 'action-nail-house-3', name: '釘子戶', type: 'ACTION', value: 3, actionType: 'NAIL_HOUSE' },
+
+  { id: 'action-market-top', name: '炒家摸頂', type: 'ACTION', value: 4, actionType: 'MARKET_TOP' },
+  { id: 'action-market-top-2', name: '炒家摸頂', type: 'ACTION', value: 4, actionType: 'MARKET_TOP' },
+
+  { id: 'action-renovation-scam', name: '圍標天價維修', type: 'ACTION', value: 4, actionType: 'RENOVATION_SCAM' },
+  { id: 'action-renovation-scam-2', name: '圍標天價維修', type: 'ACTION', value: 4, actionType: 'RENOVATION_SCAM' },
+
+  { id: 'action-haunted-rumor', name: '凶宅傳聞', type: 'ACTION', value: 3, actionType: 'HAUNTED_RUMOR' },
+  { id: 'action-haunted-rumor-2', name: '凶宅傳聞', type: 'ACTION', value: 3, actionType: 'HAUNTED_RUMOR' },
+  { id: 'action-haunted-rumor-3', name: '凶宅傳聞', type: 'ACTION', value: 3, actionType: 'HAUNTED_RUMOR' },
+
   // 4 colors can be improved (TRANSPORT can't — see NO_IMPROVEMENT_COLOR), each capped at one
   // house + one hotel. Bumped again (5->8 house, 4->6 hotel) since even the first bump still felt
   // scarce across a full multiplayer game sharing one draw pool.

@@ -17,7 +17,9 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
     case 'REACTION_REQUESTED':
       return `${nameOf(event.playerId)} 要回應「${event.card.name}」`;
     case 'REACTION_RESOLVED':
-      return `${nameOf(event.playerId)} ${event.response === 'JUST_SAY_NO' ? '打出封區!' : '接受咗'}`;
+      return `${nameOf(event.playerId)} ${
+        event.response === 'JUST_SAY_NO' ? '打出封區!' : event.response === 'COUNTER' ? '打出炒家摸頂反擊!' : '接受咗'
+      }`;
     case 'RENT_CHARGED':
       return event.amount === 0
         ? `${nameOf(event.toPlayerId)} 想同 ${nameOf(event.fromPlayerId)} 收租,但而家冇嘢收得到(可能因為《賣地流標》未集齊套暫停收租)`
@@ -36,6 +38,12 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return event.success
         ? `${nameOf(event.toPlayerId)} 打荷包,由 ${nameOf(event.fromPlayerId)} 度偷咗一張手牌`
         : `${nameOf(event.toPlayerId)} 想打荷包,但 ${nameOf(event.fromPlayerId)} 手牌係空嘅`;
+    case 'PROPERTY_PROTECTED':
+      return `${nameOf(event.playerId)} 用釘子戶保護咗一套物業`;
+    case 'IMPROVEMENT_STRIPPED':
+      return `${nameOf(event.toPlayerId)} 用圍標天價維修拆走咗 ${nameOf(event.fromPlayerId)} 嘅洋樓/酒店`;
+    case 'PROPERTY_STIGMATIZED':
+      return `${nameOf(event.toPlayerId)} 用凶宅傳聞逼 ${nameOf(event.fromPlayerId)} 棄咗一張物業`;
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

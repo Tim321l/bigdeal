@@ -7,7 +7,7 @@ interface ReactionPromptProps {
   sourceName: string;
   myHand: Card[];
   myBank: Card[];
-  onRespond: (response: 'ACCEPT' | 'JUST_SAY_NO', paymentCardIds?: string[]) => void;
+  onRespond: (response: 'ACCEPT' | 'JUST_SAY_NO' | 'COUNTER', paymentCardIds?: string[]) => void;
 }
 
 /** Rent, Birthday, and Debt Collector all demand money — accepting those opens a PaymentPicker
@@ -19,6 +19,7 @@ function isDebtReaction(pending: PendingReaction): boolean {
 export function ReactionPrompt({ pending, sourceName, myHand, myBank, onRespond }: ReactionPromptProps) {
   const [showPayment, setShowPayment] = useState(false);
   const hasJustSayNo = myHand.some((card) => card.actionType === 'JUST_SAY_NO');
+  const hasMarketTop = myHand.some((card) => card.actionType === 'MARKET_TOP');
   const owesDebt = isDebtReaction(pending);
   const amount = pending.amount ?? pending.card.value;
 
@@ -58,6 +59,16 @@ export function ReactionPrompt({ pending, sourceName, myHand, myBank, onRespond 
           >
             封區!{!hasJustSayNo ? '(冇封區卡)' : ''}
           </button>
+          {owesDebt && (
+            <button
+              type="button"
+              className="btn btn--danger"
+              disabled={!hasMarketTop}
+              onClick={() => onRespond('COUNTER')}
+            >
+              炒家摸頂!(反收 ${amount}M){!hasMarketTop ? '(冇呢張卡)' : ''}
+            </button>
+          )}
         </div>
       </div>
     </div>

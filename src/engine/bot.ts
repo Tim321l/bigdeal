@@ -50,8 +50,16 @@ function heldJustSayNo(hand: Card[]): Card | undefined {
   return hand.find((c) => c.actionType === 'JUST_SAY_NO');
 }
 
+function isProtected(target: Player, color: PropertyColor): boolean {
+  return target.field[color].some((c) => c.actionType === 'NAIL_HOUSE');
+}
+
+// Deterministic bots must never pick a 釘子戶-protected target: an invalid PLAY_CARD doesn't
+// consume the turn's action budget, so re-evaluating the same deterministic logic next step
+// would just propose the exact same illegal move forever.
 function stealableCard(target: Player): { color: PropertyColor; card: Card } | undefined {
   for (const color of PROPERTY_COLORS) {
+    if (isProtected(target, color)) continue;
     const properties = target.field[color].filter((c) => c.type === 'PROPERTY');
     if (properties.length > 0 && properties.length < COMPLETE_SET_SIZE) {
       const card = properties[0];
@@ -62,7 +70,34 @@ function stealableCard(target: Player): { color: PropertyColor; card: Card } | u
 }
 
 function completeSetColor(target: Player): PropertyColor | undefined {
-  return PROPERTY_COLORS.find((color) => target.field[color].filter((c) => c.type === 'PROPERTY').length >= COMPLETE_SET_SIZE);
+  return PROPERTY_COLORS.find(
+    (color) => target.field[color].filter((c) => c.type === 'PROPERTY').length >= COMPLETE_SET_SIZE && !isProtected(target, color),
+  );
+}
+
+/** Any opponent property card (property only, not a House/Hotel attachment) that isn't
+ * 釘子戶-protected — 凶宅傳聞 can target complete sets too, unlike Sly Deal. */
+function stigmatizableCard(target: Player): { color: PropertyColor; card: Card } | undefined {
+  for (const color of PROPERTY_COLORS) {
+    if (isProtected(target, color)) continue;
+    const card = target.field[color].find((c) => c.type === 'PROPERTY');
+    if (card) return { color, card };
+  }
+  return undefined;
+}
+
+/** A color with a House and/or Hotel attached, for 圍標天價維修 to strip. */
+function improvedColor(target: Player): PropertyColor | undefined {
+  return PROPERTY_COLORS.find((color) => target.field[color].some((c) => c.actionType === 'HOUSE' || c.actionType === 'HOTEL'));
+}
+
+/** Prefer protecting a complete set (the bot's most valuable asset); fall back to any owned,
+ * unprotected color. */
+function eligibleNailHouseColor(player: Player): PropertyColor | undefined {
+  const owned = PROPERTY_COLORS.filter(
+    (color) => player.field[color].some((c) => c.type === 'PROPERTY') && !isProtected(player, color),
+  );
+  return owned.find((color) => player.field[color].filter((c) => c.type === 'PROPERTY').length >= COMPLETE_SET_SIZE) ?? owned[0];
 }
 
 function eligibleHouseColor(player: Player): PropertyColor | undefined {
@@ -109,9 +144,24 @@ export function decideBotAction(state: GameState, botPlayerId: string, level: Bo
 
 function decideReaction(state: GameState, bot: Player, level: BotLevel): ActionPayload {
   const pending = state.pendingReaction;
-  const justSayNo = heldJustSayNo(bot.hand);
 
-  if (level === 1 || !pending || !justSayNo) {
+  if (level === 1 || !pending) {
+    return { type: 'RESPOND', playerId: bot.id, response: 'ACCEPT' };
+  }
+
+  // 炒家摸頂 nets a bigger swing than 封區 on a money demand (you go from paying to receiving,
+  // not just avoiding the payment), so prefer it whenever it's actually usable — only the real
+  // target can play it, and only while the charge is still live (not already 封區'd away).
+  const marketTop = bot.hand.find((c) => c.actionType === 'MARKET_TOP');
+  const isMoneyDemand =
+    pending.card.type === 'RENT' || pending.card.actionType === 'BIRTHDAY' || pending.card.actionType === 'DEBT_COLLECTOR';
+  const isActualTarget = pending.targetQueue[0] === bot.id;
+  if (marketTop && isMoneyDemand && isActualTarget && !pending.cancelled) {
+    return { type: 'RESPOND', playerId: bot.id, response: 'COUNTER' };
+  }
+
+  const justSayNo = heldJustSayNo(bot.hand);
+  if (!justSayNo) {
     return { type: 'RESPOND', playerId: bot.id, response: 'ACCEPT' };
   }
 
@@ -189,6 +239,13 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
       return { type: 'PLAY_CARD', playerId: bot.id, cardId: hotelCard.id, target };
     }
 
+    const nailHouseCard = hand.find((c) => c.actionType === 'NAIL_HOUSE');
+    const nailHouseColor = nailHouseCard ? eligibleNailHouseColor(bot) : undefined;
+    if (nailHouseCard && nailHouseColor) {
+      const target: PlayCardTarget = { playerId: bot.id, color: nailHouseColor };
+      return { type: 'PLAY_CARD', playerId: bot.id, cardId: nailHouseCard.id, target };
+    }
+
     const passGo = hand.find((c) => c.actionType === 'PASS_GO');
     if (passGo) {
       return { type: 'PLAY_CARD', playerId: bot.id, cardId: passGo.id };
@@ -200,6 +257,13 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
       if (dealBreaker && dealBreakerColor) {
         const target: PlayCardTarget = { playerId: leader.id, color: dealBreakerColor };
         return { type: 'PLAY_CARD', playerId: bot.id, cardId: dealBreaker.id, target };
+      }
+
+      const renovationScam = hand.find((c) => c.actionType === 'RENOVATION_SCAM');
+      const scamColor = renovationScam ? improvedColor(leader) : undefined;
+      if (renovationScam && scamColor) {
+        const target: PlayCardTarget = { playerId: leader.id, color: scamColor };
+        return { type: 'PLAY_CARD', playerId: bot.id, cardId: renovationScam.id, target };
       }
 
       if (level === 3) {
@@ -221,13 +285,21 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
           const target: PlayCardTarget = { playerId: leader.id };
           return { type: 'PLAY_CARD', playerId: bot.id, cardId: pickpocket.id, target };
         }
+
+        const hauntedRumor = hand.find((c) => c.actionType === 'HAUNTED_RUMOR');
+        const stigma = hauntedRumor ? stigmatizableCard(leader) : undefined;
+        if (hauntedRumor && stigma) {
+          const target: PlayCardTarget = { playerId: leader.id, cardId: stigma.card.id };
+          return { type: 'PLAY_CARD', playerId: bot.id, cardId: hauntedRumor.id, target };
+        }
       }
     }
   }
 
-  // Nothing productive left to play — bank the first bankable card, but hold onto 封區 for
-  // defense rather than spending it as cash.
-  const bankable = hand.find((c) => c.actionType !== 'JUST_SAY_NO');
+  // Nothing productive left to play — bank the first bankable card, but hold onto 封區/炒家摸頂 for
+  // defense rather than spending them as cash (both are reactive-only, so decideActionPhase can
+  // never play them itself anyway).
+  const bankable = hand.find((c) => c.actionType !== 'JUST_SAY_NO' && c.actionType !== 'MARKET_TOP');
   if (bankable) {
     return { type: 'PLAY_CARD', playerId: bot.id, cardId: bankable.id, asBank: true };
   }

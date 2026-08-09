@@ -311,7 +311,7 @@ describe('action cards', () => {
     expect(nextState.players[0]?.hand.map((c) => c.id)).toEqual([dealBreaker.id]);
     expect(events).toContainEqual({
       type: 'INVALID_ACTION',
-      reason: 'Deal Breaker requires targeting a complete property set.',
+      reason: 'Deal Breaker requires targeting a complete, unprotected property set.',
     });
   });
 

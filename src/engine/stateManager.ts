@@ -118,6 +118,14 @@ function removeCardFromField(player: Player, color: PropertyColor, cardId: strin
   return list.splice(index, 1)[0];
 }
 
+/** 釘子戶 (NAIL_HOUSE) protects a whole color set from ever being taken away — Deal Breaker, Sly
+ * Deal, Forced Deal, and 凶宅傳聞 all refuse to target it. It does NOT protect against 圍標天價維修
+ * (only strips the House/Hotel attachment, not the underlying property, so a nail house still has
+ * to pay a renovation bill like everyone else). */
+function isNailHouseProtected(player: Player, color: PropertyColor): boolean {
+  return player.field[color].some((card) => card.actionType === 'NAIL_HOUSE');
+}
+
 function drawCards(state: GameState, count: number): Card[] {
   const drawn: Card[] = [];
   for (let i = 0; i < count; i++) {
@@ -497,9 +505,14 @@ function playActionCard(
     case 'DEAL_BREAKER': {
       const opponent = resolveOpponent(state, player, target);
       const color = target?.color;
-      if (!opponent || !color || opponent.field[color].length < COMPLETE_SET_SIZE) {
+      if (
+        !opponent ||
+        !color ||
+        opponent.field[color].length < COMPLETE_SET_SIZE ||
+        isNailHouseProtected(opponent, color)
+      ) {
         player.hand.push(card);
-        invalid(events, 'Deal Breaker requires targeting a complete property set.');
+        invalid(events, 'Deal Breaker requires targeting a complete, unprotected property set.');
         return;
       }
       state.discardPile.push(card);
@@ -515,9 +528,15 @@ function playActionCard(
       const opponent = resolveOpponent(state, player, target);
       const cardId = target?.cardId;
       const color = cardId && opponent ? findCardColor(opponent, cardId) : undefined;
-      if (!opponent || !cardId || !color || opponent.field[color].length >= COMPLETE_SET_SIZE) {
+      if (
+        !opponent ||
+        !cardId ||
+        !color ||
+        opponent.field[color].length >= COMPLETE_SET_SIZE ||
+        isNailHouseProtected(opponent, color)
+      ) {
         player.hand.push(card);
-        invalid(events, 'Sly Deal requires targeting a single property outside a completed set.');
+        invalid(events, 'Sly Deal requires targeting a single unprotected property outside a completed set.');
         return;
       }
       state.discardPile.push(card);
@@ -541,10 +560,11 @@ function playActionCard(
         !offeredCardId ||
         !targetColor ||
         !offeredColor ||
-        opponent.field[targetColor].length >= COMPLETE_SET_SIZE
+        opponent.field[targetColor].length >= COMPLETE_SET_SIZE ||
+        isNailHouseProtected(opponent, targetColor)
       ) {
         player.hand.push(card);
-        invalid(events, 'Forced Deal requires a valid property to offer and receive, neither in a completed set.');
+        invalid(events, 'Forced Deal requires a valid, unprotected property to offer and receive, neither in a completed set.');
         return;
       }
       state.discardPile.push(card);
@@ -604,6 +624,63 @@ function playActionCard(
       player.field[color].push(card);
       state.actionsPlayedThisTurn += 1;
       events.push({ type: 'PROPERTY_BUILT', playerId: player.id, cardId: card.id, color });
+      return;
+    }
+    case 'NAIL_HOUSE': {
+      // Self-targeting and permanent, like House/Hotel — attaches immediately, no reaction window.
+      const color = target?.color;
+      const ownsProperty = color ? player.field[color].some((c) => c.type === 'PROPERTY') : false;
+      const alreadyProtected = color ? isNailHouseProtected(player, color) : false;
+      if (!color || !ownsProperty || alreadyProtected) {
+        player.hand.push(card);
+        invalid(events, 'Nail House must go on one of your own colors you already own a property in.');
+        return;
+      }
+      player.field[color].push(card);
+      state.actionsPlayedThisTurn += 1;
+      events.push({ type: 'PROPERTY_PROTECTED', playerId: player.id, color });
+      return;
+    }
+    case 'MARKET_TOP': {
+      player.hand.push(card);
+      invalid(events, '炒家摸頂 can only be played in response to a rent/money-demand card.');
+      return;
+    }
+    case 'RENOVATION_SCAM': {
+      const opponent = resolveOpponent(state, player, target);
+      const color = target?.color;
+      const improved = color && opponent ? opponent.field[color].some((c) => c.actionType === 'HOUSE' || c.actionType === 'HOTEL') : false;
+      if (!opponent || !color || !improved) {
+        player.hand.push(card);
+        invalid(events, 'Renovation Scam requires targeting an opponent set with a House or Hotel.');
+        return;
+      }
+      state.discardPile.push(card);
+      state.actionsPlayedThisTurn += 1;
+      openReactionWindow(
+        state,
+        { card, sourcePlayerId: player.id, targetQueue: [opponent.id], context: target },
+        events,
+      );
+      return;
+    }
+    case 'HAUNTED_RUMOR': {
+      const opponent = resolveOpponent(state, player, target);
+      const cardId = target?.cardId;
+      const color = cardId && opponent ? findCardColor(opponent, cardId) : undefined;
+      const targetCard = color && opponent ? opponent.field[color].find((c) => c.id === cardId) : undefined;
+      if (!opponent || !cardId || !color || !targetCard || targetCard.type !== 'PROPERTY' || isNailHouseProtected(opponent, color)) {
+        player.hand.push(card);
+        invalid(events, 'Haunted Rumor requires targeting one of an opponent’s unprotected property cards.');
+        return;
+      }
+      state.discardPile.push(card);
+      state.actionsPlayedThisTurn += 1;
+      openReactionWindow(
+        state,
+        { card, sourcePlayerId: player.id, targetQueue: [opponent.id], context: target },
+        events,
+      );
       return;
     }
     case 'HOTEL': {
@@ -702,6 +779,40 @@ function handleRespond(
     return;
   }
 
+  if (action.response === 'COUNTER') {
+    // 炒家摸頂 is a one-shot reversal, not a chainable cancel like 封區 — only the actual target of
+    // a money demand can play it (not the source mid-封區-exchange), and only while the demand is
+    // still live (a 封區'd charge has nothing left to reverse).
+    const isMoneyDemand =
+      pending.card.type === 'RENT' || pending.card.actionType === 'BIRTHDAY' || pending.card.actionType === 'DEBT_COLLECTOR';
+    const counterIndex = responder.hand.findIndex((c) => c.actionType === 'MARKET_TOP');
+    if (!isMoneyDemand || pending.cancelled || responder.id !== currentTargetId || counterIndex === -1) {
+      invalid(events, 'You cannot counter this with 炒家摸頂.');
+      return;
+    }
+    const [marketTop] = responder.hand.splice(counterIndex, 1);
+    if (marketTop) state.discardPile.push(marketTop);
+
+    const source = findPlayer(state, pending.sourcePlayerId);
+    if (source) chargePlayer(source, responder, pending.amount ?? pending.card.value, undefined, events);
+    events.push({ type: 'REACTION_RESOLVED', playerId: responder.id, response: 'COUNTER' });
+
+    pending.targetQueue = pending.targetQueue.slice(1);
+    pending.cancelled = false;
+    if (pending.targetQueue.length === 0) {
+      state.pendingReaction = undefined;
+      state.phase = 'ACTION';
+    } else {
+      const nextTarget = pending.targetQueue[0];
+      if (nextTarget) {
+        pending.currentResponderId = nextTarget;
+        events.push({ type: 'REACTION_REQUESTED', playerId: nextTarget, card: pending.card });
+      }
+    }
+    checkAndRecordWinner(state, events);
+    return;
+  }
+
   if (!pending.cancelled) {
     const target = findPlayer(state, currentTargetId);
     if (target) resolvePendingEffectForTarget(state, pending, target, action.paymentCardIds, events);
@@ -794,6 +905,26 @@ function resolvePendingEffectForTarget(
         cardAId: offeredCard.id,
         cardBId: targetCard.id,
       });
+      return;
+    }
+    case 'RENOVATION_SCAM': {
+      const color = pending.context?.color;
+      if (!color) return;
+      const stripped = target.field[color].filter((c) => c.actionType === 'HOUSE' || c.actionType === 'HOTEL');
+      if (stripped.length === 0) return;
+      target.field[color] = target.field[color].filter((c) => c.actionType !== 'HOUSE' && c.actionType !== 'HOTEL');
+      state.discardPile.push(...stripped);
+      events.push({ type: 'IMPROVEMENT_STRIPPED', fromPlayerId: target.id, toPlayerId: source.id, color });
+      return;
+    }
+    case 'HAUNTED_RUMOR': {
+      const cardId = pending.context?.cardId;
+      const color = cardId ? findCardColor(target, cardId) : undefined;
+      if (!cardId || !color) return;
+      const discarded = removeCardFromField(target, color, cardId);
+      if (!discarded) return;
+      state.discardPile.push(discarded);
+      events.push({ type: 'PROPERTY_STIGMATIZED', fromPlayerId: target.id, toPlayerId: source.id, cardId });
       return;
     }
     default:

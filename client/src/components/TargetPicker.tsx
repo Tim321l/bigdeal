@@ -134,6 +134,39 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
     );
   }
 
+  // 釘子戶 also goes on YOUR OWN colors — any color you already own a property in, not yet
+  // protected. Unlike House/Hotel it doesn't need a completed set, and it does work on
+  // TRANSPORT (the "no improvements" rule only applies to House/Hotel).
+  if (card.actionType === 'NAIL_HOUSE') {
+    const eligibleColors = PROPERTY_COLORS.filter((color) => {
+      const set = me?.field[color] ?? [];
+      const ownsProperty = set.some((c) => c.type === 'PROPERTY');
+      const alreadyProtected = set.some((c) => c.actionType === 'NAIL_HOUSE');
+      return ownsProperty && !alreadyProtected;
+    });
+
+    return (
+      <PickerShell title={`使用「${card.name}」— 揀你自己嘅物業套`} onCancel={onCancel}>
+        {eligibleColors.length === 0 ? (
+          <p>而家未有合資格嘅物業套(要自己有嗰種顏色,亦都未受保護)。</p>
+        ) : (
+          <div className="modal__list">
+            {eligibleColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className="btn btn--block"
+                onClick={() => onConfirm({ playerId: myGamePlayerId, color })}
+              >
+                {COLOR_LABELS[color]}
+              </button>
+            ))}
+          </div>
+        )}
+      </PickerShell>
+    );
+  }
+
   if (!opponent) {
     return (
       <PickerShell title={`使用「${card.name}」`} onCancel={onCancel}>
@@ -158,12 +191,15 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
     );
   }
 
+  const isProtected = (color: (typeof PROPERTY_COLORS)[number]): boolean =>
+    opponent.field[color].some((c) => c.actionType === 'NAIL_HOUSE');
+
   if (card.actionType === 'DEAL_BREAKER') {
-    const completeColors = PROPERTY_COLORS.filter((color) => opponent.field[color].length >= COMPLETE_SET_SIZE);
+    const completeColors = PROPERTY_COLORS.filter((color) => opponent.field[color].length >= COMPLETE_SET_SIZE && !isProtected(color));
     return (
       <PickerShell title={`對 ${opponent.name} 使用「${card.name}」`} onBack={() => setOpponentId(null)} onCancel={onCancel}>
         {completeColors.length === 0 ? (
-          <p>{opponent.name} 未有集齊嘅物業套,揀第位啦。</p>
+          <p>{opponent.name} 冇未受保護嘅集齊物業套,揀第位啦。</p>
         ) : (
           <div className="modal__list">
             {completeColors.map((color) => (
@@ -182,8 +218,51 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
     );
   }
 
+  if (card.actionType === 'RENOVATION_SCAM') {
+    const improvedColors = PROPERTY_COLORS.filter((color) => opponent.field[color].some((c) => c.actionType === 'HOUSE' || c.actionType === 'HOTEL'));
+    return (
+      <PickerShell title={`對 ${opponent.name} 使用「${card.name}」`} onBack={() => setOpponentId(null)} onCancel={onCancel}>
+        {improvedColors.length === 0 ? (
+          <p>{opponent.name} 冇任何一套裝咗洋樓或者酒店,揀第位啦。</p>
+        ) : (
+          <div className="modal__list">
+            {improvedColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className="btn btn--block"
+                onClick={() => onConfirm({ playerId: opponent.id, color })}
+              >
+                {COLOR_LABELS[color]}
+              </button>
+            ))}
+          </div>
+        )}
+      </PickerShell>
+    );
+  }
+
+  if (card.actionType === 'HAUNTED_RUMOR') {
+    const targetable: Card[] = PROPERTY_COLORS.flatMap((color) =>
+      isProtected(color) ? [] : opponent.field[color].filter((c) => c.type === 'PROPERTY'),
+    );
+    return (
+      <PickerShell title={`對 ${opponent.name} 使用「${card.name}」`} onBack={() => setOpponentId(null)} onCancel={onCancel}>
+        {targetable.length === 0 ? (
+          <p>{opponent.name} 冇未受保護嘅物業,揀第位啦。</p>
+        ) : (
+          <div className="modal__list modal__list--cards">
+            {targetable.map((c) => (
+              <CardView key={c.id} card={c} onClick={() => onConfirm({ playerId: opponent.id, cardId: c.id })} />
+            ))}
+          </div>
+        )}
+      </PickerShell>
+    );
+  }
+
   const stealable: Card[] = PROPERTY_COLORS.flatMap((color) =>
-    opponent.field[color].length < COMPLETE_SET_SIZE ? opponent.field[color] : [],
+    opponent.field[color].length < COMPLETE_SET_SIZE && !isProtected(color) ? opponent.field[color] : [],
   );
 
   if (card.actionType === 'SLY_DEAL') {

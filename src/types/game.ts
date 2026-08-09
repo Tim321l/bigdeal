@@ -18,7 +18,11 @@ export type ActionType =
   | 'HOUSE'
   | 'HOTEL'
   | 'DOUBLE_RENT'
-  | 'PICKPOCKET';
+  | 'PICKPOCKET'
+  | 'NAIL_HOUSE'
+  | 'MARKET_TOP'
+  | 'RENOVATION_SCAM'
+  | 'HAUNTED_RUMOR';
 
 export interface Card {
   id: string;
@@ -121,7 +125,7 @@ export type ActionPayload =
       type: 'RESPOND';
       playerId: string;
       cardId?: string;
-      response: 'ACCEPT' | 'JUST_SAY_NO';
+      response: 'ACCEPT' | 'JUST_SAY_NO' | 'COUNTER';
       /** Which of the responder's own bank/hand cards to pay a debt with, if any is owed.
        * Omitted (e.g. by bots) falls back to auto-picking the cheapest cards first. */
       paymentCardIds?: string[] | undefined;
@@ -135,7 +139,7 @@ export type GameEvent =
   | { type: 'CARD_BANKED'; playerId: string; cardId: string; amount: number }
   | { type: 'PROPERTY_BUILT'; playerId: string; cardId: string; color: PropertyColor }
   | { type: 'REACTION_REQUESTED'; playerId: string; card: Card }
-  | { type: 'REACTION_RESOLVED'; playerId: string; response: 'ACCEPT' | 'JUST_SAY_NO' }
+  | { type: 'REACTION_RESOLVED'; playerId: string; response: 'ACCEPT' | 'JUST_SAY_NO' | 'COUNTER' }
   | { type: 'RENT_CHARGED'; fromPlayerId: string; toPlayerId: string; amount: number }
   | { type: 'RENT_MULTIPLIED'; playerId: string; multiplier: number }
   | { type: 'PROPERTY_STOLEN'; fromPlayerId: string; toPlayerId: string; cardId: string }
@@ -143,6 +147,9 @@ export type GameEvent =
   | { type: 'PROPERTY_SWAPPED'; playerAId: string; playerBId: string; cardAId: string; cardBId: string }
   | { type: 'HAND_DISCARDED'; playerId: string; count: number }
   | { type: 'HAND_CARD_STOLEN'; fromPlayerId: string; toPlayerId: string; success: boolean }
+  | { type: 'PROPERTY_PROTECTED'; playerId: string; color: PropertyColor }
+  | { type: 'IMPROVEMENT_STRIPPED'; fromPlayerId: string; toPlayerId: string; color: PropertyColor }
+  | { type: 'PROPERTY_STIGMATIZED'; fromPlayerId: string; toPlayerId: string; cardId: string }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

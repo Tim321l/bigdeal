@@ -8,7 +8,18 @@ interface PlayerHandProps {
   onPlayTargeted: (card: Card) => void;
 }
 
-const TARGETED_ACTIONS = new Set(['DEAL_BREAKER', 'SLY_DEAL', 'FORCED_DEAL', 'DEBT_COLLECTOR', 'HOUSE', 'HOTEL', 'PICKPOCKET']);
+const TARGETED_ACTIONS = new Set([
+  'DEAL_BREAKER',
+  'SLY_DEAL',
+  'FORCED_DEAL',
+  'DEBT_COLLECTOR',
+  'HOUSE',
+  'HOTEL',
+  'PICKPOCKET',
+  'NAIL_HOUSE',
+  'RENOVATION_SCAM',
+  'HAUNTED_RUMOR',
+]);
 
 /** Wild rent cards (2+ eligible colors) need a color picked before playing; single-color rent
  * cards don't and go straight through onPlay like before. */
@@ -25,6 +36,7 @@ function primaryLabel(card: Card): string | null {
       case 'DOUBLE_RENT':
         return '雙倍租金';
       case 'JUST_SAY_NO':
+      case 'MARKET_TOP':
         return null; // only usable when responding to someone else's action
       case 'PASS_GO':
         return '過龍!';
@@ -35,6 +47,9 @@ function primaryLabel(card: Card): string | null {
       case 'HOUSE':
       case 'HOTEL':
       case 'PICKPOCKET':
+      case 'NAIL_HOUSE':
+      case 'RENOVATION_SCAM':
+      case 'HAUNTED_RUMOR':
         return '使用(揀目標)';
       default:
         return '使用';

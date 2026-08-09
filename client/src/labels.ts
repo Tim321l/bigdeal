@@ -20,6 +20,10 @@ export const ACTION_LABELS: Record<ActionType, string> = {
   HOTEL: '酒店',
   DOUBLE_RENT: '孖展炒樓',
   PICKPOCKET: '打荷包',
+  NAIL_HOUSE: '釘子戶',
+  MARKET_TOP: '炒家摸頂',
+  RENOVATION_SCAM: '圍標天價維修',
+  HAUNTED_RUMOR: '凶宅傳聞',
 };
 
 export const PHASE_LABELS: Record<TurnPhase, string> = {
@@ -43,6 +47,10 @@ export const ACTION_DESCRIPTIONS: Record<ActionType, string> = {
   DOUBLE_RENT: '令你今個回合出嘅下一張租單金額變雙倍。',
   JUST_SAY_NO: '唯一可以拒絕對手招式嘅方法——輪到你回應嗰陣打出嚟可以抵消件事(包括收租、搶樓)。冇呢張卡就乜都要接受。',
   PICKPOCKET: '揀一位對手,隨機由佢手牌摸走一張(唔係物業,係手牌本身)。',
+  NAIL_HOUSE: '裝喺自己一種已經有物業嘅顏色度,之後嗰套永久唔會俾強制收樓/市建局強拍/移民盤劈價/凶宅傳聞搶走或者郁到(圍標天價維修唔受呢個保護)。',
+  MARKET_TOP: '唔可以主動打出——收租/圍標維修/收數要你俾錢嗰陣先可以用嚟反擊:唔使俾,仲要對方倒過來俾返同額俾你。',
+  RENOVATION_SCAM: '揀一位對手一套有洋樓或者酒店嘅物業,強制拆走佢嘅洋樓/酒店(改善)加成。',
+  HAUNTED_RUMOR: '揀一位對手一張物業(就算已經集齊套都得),強制棄咗嗰張,可以拆散對手已集齊嘅套。',
 };
 
 /** Full plain-language description of any card, for a click-to-explain popover. */

@@ -53,7 +53,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
     setTargetingCard(null);
   };
 
-  const respond = (response: 'ACCEPT' | 'JUST_SAY_NO', paymentCardIds?: string[]): void => {
+  const respond = (response: 'ACCEPT' | 'JUST_SAY_NO' | 'COUNTER', paymentCardIds?: string[]): void => {
     onIntent({ type: 'RESPOND', playerId: myGamePlayerId, response, paymentCardIds });
   };
 
