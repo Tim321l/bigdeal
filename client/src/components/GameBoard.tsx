@@ -65,6 +65,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
       <EventToast events={recentEvents} nameOf={nameOf} />
       <header className="game-header">
         <div className="game-header__status">
+          {game.mode === 'BATTLE_ROYALE' && <span className="badge badge--eliminated">🔥 大逃殺閃擊戰</span>}
           <span className="badge">{PHASE_LABELS[game.phase]}</span>
           <span>{isMyTurn ? '輪到你' : `輪到 ${activePlayer?.name ?? '?'}`}</span>
           <span>行動 {game.actionsPlayedThisTurn}/{actionLimit}</span>
@@ -75,6 +76,10 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
           離開
         </button>
       </header>
+
+      {me.eliminated && (
+        <div className="banner banner--error">💥 你已經破產出局,而家淨係可以旁觀睇埋呢鋪。</div>
+      )}
 
       <MacroEventBanner events={game.activeMacroEvents} />
 
@@ -146,7 +151,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
         />
       )}
 
-      {winner && <GameOverScreen winnerName={nameOf(winner)} isMe={winner === myGamePlayerId} onLeave={onLeave} />}
+      {winner && <GameOverScreen winnerName={nameOf(winner)} isMe={winner === myGamePlayerId} mode={game.mode} onLeave={onLeave} />}
     </div>
   );
 }

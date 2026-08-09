@@ -5,6 +5,7 @@ export type {
   ActionType,
   Card,
   GameEvent,
+  GameMode,
   MacroEvent,
   PendingReaction,
   PlayCardTarget,

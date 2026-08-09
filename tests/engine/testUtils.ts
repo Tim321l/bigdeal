@@ -23,6 +23,7 @@ export function makePlayer(id: string, name: string, overrides: Partial<Player> 
 
 export function makeState(overrides: Partial<GameState> = {}): GameState {
   return {
+    mode: 'CLASSIC',
     turn: 1,
     activePlayerIndex: 0,
     players: [makePlayer('player-1', 'Alice'), makePlayer('player-2', 'Bob')],

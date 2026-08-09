@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { RoomSummary } from '../types';
+import type { GameMode, RoomSummary } from '../types';
 
 // Mirrors src/server/roomManager.ts's MAX_PLAYERS — duplicated rather than imported because that
 // module pulls in Node built-ins (node:crypto) that don't belong in a browser bundle.
@@ -10,17 +10,23 @@ const BOT_LEVEL_LABELS: Record<(typeof BOT_LEVELS)[number], string> = {
   2: '中(Lv.2)',
   3: '難(Lv.3)',
 };
+const GAME_MODES: GameMode[] = ['CLASSIC', 'BATTLE_ROYALE'];
+const GAME_MODE_LABELS: Record<GameMode, string> = {
+  CLASSIC: '經典模式(儲齊 3 套)',
+  BATTLE_ROYALE: '🔥 大逃殺閃擊戰(收租雙倍,破產淘汰)',
+};
 
 interface WaitingRoomProps {
   room: RoomSummary;
   myLobbyId: string;
   onToggleReady: (ready: boolean) => void;
+  onSetMode: (mode: GameMode) => void;
   onAddBot: (level: 1 | 2 | 3) => void;
   onRemoveBot: (botLobbyId: string) => void;
   onLeave: () => void;
 }
 
-export function WaitingRoom({ room, myLobbyId, onToggleReady, onAddBot, onRemoveBot, onLeave }: WaitingRoomProps) {
+export function WaitingRoom({ room, myLobbyId, onToggleReady, onSetMode, onAddBot, onRemoveBot, onLeave }: WaitingRoomProps) {
   const [botLevel, setBotLevel] = useState<1 | 2 | 3>(2);
   const me = room.players.find((p) => p.lobbyId === myLobbyId);
   const isHost = room.hostLobbyId === myLobbyId;
@@ -40,6 +46,27 @@ export function WaitingRoom({ room, myLobbyId, onToggleReady, onAddBot, onRemove
           複製
         </button>
       </div>
+
+      <div className="mode-controls">
+        <span className="mode-controls__label">玩法:</span>
+        {isHost ? (
+          <div className="mode-controls__tabs">
+            {GAME_MODES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`tab${room.mode === mode ? ' tab--active' : ''}`}
+                onClick={() => onSetMode(mode)}
+              >
+                {GAME_MODE_LABELS[mode]}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="mode-controls__readonly">{GAME_MODE_LABELS[room.mode]}</span>
+        )}
+      </div>
+
       <p className="waiting-room__hint">{canStart ? '所有人 Ready 就會自動開始。' : '要至少 2 位玩家(或機械人)先可以開始。'}</p>
       <ul className="player-list">
         {room.players.map((p) => (

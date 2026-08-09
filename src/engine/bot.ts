@@ -16,10 +16,11 @@ function fieldValue(player: Player): number {
   return PROPERTY_COLORS.reduce((sum, color) => sum + player.field[color].reduce((s, card) => s + card.value, 0), 0);
 }
 
-/** The bot's preferred target: whoever is closest to winning, breaking ties by total field value. */
+/** The bot's preferred target: whoever is closest to winning, breaking ties by total field value.
+ * Eliminated players (BATTLE_ROYALE) own nothing and can't be targeted — never worth picking. */
 function findLeader(state: GameState, excludeId: string): Player | undefined {
   return state.players
-    .filter((p) => p.id !== excludeId)
+    .filter((p) => p.id !== excludeId && !p.eliminated)
     .slice()
     .sort((a, b) => countCompleteSets(b) - countCompleteSets(a) || fieldValue(b) - fieldValue(a))[0];
 }

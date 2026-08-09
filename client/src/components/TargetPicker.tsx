@@ -396,9 +396,13 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
 
   const isProtected = (color: (typeof PROPERTY_COLORS)[number]): boolean =>
     opponent.field[color].some((c) => c.actionType === 'NAIL_HOUSE');
+  // NOT field[color].length — 釘子戶 can sit on an incomplete set, so the raw array length
+  // alone doesn't mean "3 properties" (mirrors the same fix in stateManager.ts).
+  const opponentPropertyCount = (color: (typeof PROPERTY_COLORS)[number]): number =>
+    opponent.field[color].filter((c) => c.type === 'PROPERTY').length;
 
   if (card.actionType === 'DEAL_BREAKER') {
-    const completeColors = PROPERTY_COLORS.filter((color) => opponent.field[color].length >= COMPLETE_SET_SIZE && !isProtected(color));
+    const completeColors = PROPERTY_COLORS.filter((color) => opponentPropertyCount(color) >= COMPLETE_SET_SIZE && !isProtected(color));
     return (
       <PickerShell title={`對 ${opponent.name} 使用「${card.name}」`} onBack={() => setOpponentId(null)} onCancel={onCancel}>
         {completeColors.length === 0 ? (
@@ -483,7 +487,7 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
   }
 
   const stealable: Card[] = PROPERTY_COLORS.flatMap((color) =>
-    opponent.field[color].length < COMPLETE_SET_SIZE && !isProtected(color) ? opponent.field[color] : [],
+    opponentPropertyCount(color) < COMPLETE_SET_SIZE && !isProtected(color) ? opponent.field[color] : [],
   );
 
   if (card.actionType === 'SLY_DEAL') {

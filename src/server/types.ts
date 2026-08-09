@@ -1,5 +1,5 @@
 import type { BotLevel } from '../engine/bot';
-import type { ActionPayload, GameEvent, GameState } from '../types/game';
+import type { ActionPayload, GameEvent, GameMode, GameState } from '../types/game';
 import type { SanitizedGameState } from './sanitize';
 
 export type RoomStatus = 'LOBBY' | 'IN_PROGRESS' | 'FINISHED';
@@ -23,6 +23,7 @@ export interface Room {
   id: string;
   status: RoomStatus;
   seed: number;
+  mode: GameMode;
   hostLobbyId: string;
   players: RoomPlayer[];
   gameState?: GameState | undefined;
@@ -41,6 +42,7 @@ export interface PublicRoomPlayer {
 export interface RoomSummary {
   id: string;
   status: RoomStatus;
+  mode: GameMode;
   hostLobbyId: string;
   players: PublicRoomPlayer[];
 }
@@ -49,6 +51,7 @@ export function toRoomSummary(room: Room): RoomSummary {
   return {
     id: room.id,
     status: room.status,
+    mode: room.mode,
     hostLobbyId: room.hostLobbyId,
     players: room.players.map((player) => ({
       lobbyId: player.lobbyId,
@@ -77,6 +80,7 @@ export interface ClientToServerEvents {
     ack: (result: AckResult<Record<string, never>>) => void,
   ) => void;
   'room:ready': (payload: { ready: boolean }, ack: (result: AckResult<{ started: boolean }>) => void) => void;
+  'room:setMode': (payload: { mode: GameMode }, ack: (result: AckResult<Record<string, never>>) => void) => void;
   'room:addBot': (payload: { level: BotLevel }, ack: (result: AckResult<Record<string, never>>) => void) => void;
   'room:removeBot': (payload: { botLobbyId: string }, ack: (result: AckResult<Record<string, never>>) => void) => void;
   'game:intent': (payload: { action: ActionPayload }, ack: (result: AckResult<Record<string, never>>) => void) => void;

@@ -15,6 +15,7 @@ export default function App() {
     createRoom,
     joinRoom,
     setReady,
+    setMode,
     sendIntent,
     addBot,
     removeBot,
@@ -37,6 +38,7 @@ export default function App() {
         room={room}
         myLobbyId={myLobbyId}
         onToggleReady={setReady}
+        onSetMode={setMode}
         onAddBot={addBot}
         onRemoveBot={removeBot}
         onLeave={leaveSession}

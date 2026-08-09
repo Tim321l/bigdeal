@@ -13,7 +13,7 @@ export function OpponentPanel({ player, isActive, isConnected, botLevel }: Oppon
   const bankTotal = player.bank.reduce((sum, card) => sum + card.value, 0);
 
   return (
-    <div className={`opponent-panel${isActive ? ' opponent-panel--active' : ''}`}>
+    <div className={`opponent-panel${isActive ? ' opponent-panel--active' : ''}${player.eliminated ? ' opponent-panel--eliminated' : ''}`}>
       <div className="opponent-panel__header">
         <span className={`status-dot${isConnected ? ' status-dot--online' : ' status-dot--offline'}`} />
         <span className="opponent-panel__name">
@@ -21,7 +21,8 @@ export function OpponentPanel({ player, isActive, isConnected, botLevel }: Oppon
           {player.name}
         </span>
         {botLevel && <span className="badge badge--bot">Lv.{botLevel}</span>}
-        {isActive && <span className="badge badge--turn">行動中</span>}
+        {player.eliminated && <span className="badge badge--eliminated">💥 已出局</span>}
+        {isActive && !player.eliminated && <span className="badge badge--turn">行動中</span>}
       </div>
       <div className="opponent-panel__hand">
         {Array.from({ length: player.handCount }, (_, i) => (

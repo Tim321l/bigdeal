@@ -57,6 +57,7 @@ describe('hasWon / checkWinner', () => {
     });
     const other = makePlayer('p1');
     const state = {
+      mode: 'CLASSIC' as const,
       turn: 1,
       activePlayerIndex: 0,
       players: [other, winner],

@@ -299,6 +299,40 @@ button {
   margin-bottom: 16px;
 }
 
+.mode-controls {
+  background: var(--bg-panel-alt);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-controls__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.mode-controls__tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mode-controls__tabs .tab {
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.mode-controls__readonly {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .bot-controls {
   background: var(--bg-panel-alt);
   border: 1px dashed var(--border);
@@ -424,6 +458,10 @@ button {
   background: var(--gold);
 }
 
+.badge--eliminated {
+  background: var(--danger);
+}
+
 .macro-events {
   display: flex;
   gap: 8px;
@@ -476,6 +514,11 @@ button {
 .opponent-panel--active {
   border-color: var(--success);
   box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.25);
+}
+
+.opponent-panel--eliminated {
+  opacity: 0.5;
+  filter: grayscale(0.8);
 }
 
 .opponent-panel__header {

@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { type BotLevel, decideBotAction } from '../engine/bot';
 import { applyAction, initGame } from '../engine/stateManager';
-import type { ActionPayload, GameEvent, GameState } from '../types/game';
+import type { ActionPayload, GameEvent, GameMode, GameState } from '../types/game';
 import type { Room, RoomPlayer } from './types';
 
 export const MIN_PLAYERS = 2;
@@ -40,6 +40,7 @@ export class RoomManager {
       id: this.generateRoomCode(),
       status: 'LOBBY',
       seed,
+      mode: 'CLASSIC',
       hostLobbyId: player.lobbyId,
       players: [player],
       createdAt: Date.now(),
@@ -141,6 +142,16 @@ export class RoomManager {
       room.status = 'FINISHED';
     }
     return ok({ room, events });
+  }
+
+  setMode(roomId: string, hostLobbyId: string, mode: GameMode): RoomResult<{ room: Room }> {
+    const room = this.rooms.get(roomId);
+    if (!room) return err('Room not found.');
+    if (room.hostLobbyId !== hostLobbyId) return err('Only the host can change the game mode.');
+    if (room.status !== 'LOBBY') return err('Cannot change the game mode after the game has started.');
+
+    room.mode = mode;
+    return ok({ room });
   }
 
   addBot(roomId: string, hostLobbyId: string, level: BotLevel): RoomResult<{ room: Room }> {
@@ -250,6 +261,7 @@ export class RoomManager {
     room.gameState = initGame(
       room.players.map((p) => p.name),
       room.seed,
+      room.mode,
     );
     room.status = 'IN_PROGRESS';
   }

@@ -5,6 +5,7 @@ import type {
   ActionPayload,
   Card,
   GameEvent,
+  GameMode,
   GameState,
   MacroEvent,
   PendingReaction,
@@ -39,7 +40,7 @@ function emptyField(): Record<PropertyColor, Card[]> {
   return field;
 }
 
-export function initGame(playerNames: string[], seed: number): GameState {
+export function initGame(playerNames: string[], seed: number, mode: GameMode = 'CLASSIC'): GameState {
   const rng = new PRNG(seed);
   const deck = rng.shuffle(CARDS);
 
@@ -59,6 +60,7 @@ export function initGame(playerNames: string[], seed: number): GameState {
   }
 
   return {
+    mode,
     turn: 1,
     activePlayerIndex: 0,
     players,
@@ -126,6 +128,14 @@ function isNailHouseProtected(player: Player, color: PropertyColor): boolean {
   return player.field[color].some((card) => card.actionType === 'NAIL_HOUSE');
 }
 
+/** Actual property-card count for a color — NOT `field[color].length`. House/Hotel only ever
+ * attach to an already-complete set, so they never inflated that raw length past 3 on their own,
+ * but 釘子戶 can attach to an INCOMPLETE set — so field[color].length alone can no longer be
+ * trusted to mean "3 properties" anywhere completeness is checked (win condition included). */
+function propertyCount(player: Player, color: PropertyColor): number {
+  return player.field[color].filter((card) => card.type === 'PROPERTY').length;
+}
+
 function drawCards(state: GameState, count: number): Card[] {
   const drawn: Card[] = [];
   for (let i = 0; i < count; i++) {
@@ -161,6 +171,13 @@ function autoPickPayment(available: Card[], amount: number): Card[] {
   return picked;
 }
 
+/** BATTLE_ROYALE doubles every rent/money-demand amount — applied once, at the point each such
+ * amount is computed (playRentCard, DEBT_COLLECTOR, BIRTHDAY), never inside chargePlayer itself
+ * (which also handles 炒家摸頂's already-resolved amount and must not double it a second time). */
+function applyBattleRoyaleMultiplier(state: GameState, amount: number): number {
+  return state.mode === 'BATTLE_ROYALE' ? amount * 2 : amount;
+}
+
 /**
  * In real Monopoly Deal the PAYER chooses which of their own cards to hand over — they might
  * give up a property they don't want rather than their cash. `chosenCardIds` carries that
@@ -168,6 +185,7 @@ function autoPickPayment(available: Card[], amount: number): Card[] {
  * auto-picking the cheapest cards first, same as before this existed.
  */
 function chargePlayer(
+  state: GameState,
   payer: Player,
   receiver: Player,
   amount: number,
@@ -183,6 +201,22 @@ function chargePlayer(
 
   const available = [...payer.bank, ...payer.hand];
   const totalAvailable = available.reduce((sum, card) => sum + card.value, 0);
+
+  if (state.mode === 'BATTLE_ROYALE' && totalAvailable < amount) {
+    // Bankrupt: can't cover the charge even handing over everything. Bank, hand, and field all
+    // transfer to the collector, and the payer is out of the game for good.
+    receiver.bank.push(...payer.bank, ...payer.hand);
+    payer.bank = [];
+    payer.hand = [];
+    for (const color of PROPERTY_COLORS) {
+      receiver.field[color].push(...payer.field[color]);
+      payer.field[color] = [];
+    }
+    payer.eliminated = true;
+    events.push({ type: 'PLAYER_ELIMINATED', playerId: payer.id, collectorId: receiver.id });
+    return;
+  }
+
   const requiredMinimum = Math.min(amount, totalAvailable);
 
   let payable: Card[];
@@ -229,7 +263,15 @@ function endTurn(state: GameState, events: GameEvent[]): void {
 
   events.push({ type: 'TURN_ENDED', playerId: activePlayer.id });
 
-  state.activePlayerIndex = (state.activePlayerIndex + 1) % state.players.length;
+  // BATTLE_ROYALE: skip eliminated seats when handing the turn off. The loop guard (stop once
+  // we've cycled back to where we started) means this can't spin forever even in a degenerate
+  // all-eliminated-but-one state — the game should already be GAME_OVER by then regardless.
+  let nextIndex = state.activePlayerIndex;
+  do {
+    nextIndex = (nextIndex + 1) % state.players.length;
+  } while (state.players[nextIndex]?.eliminated && nextIndex !== state.activePlayerIndex);
+  state.activePlayerIndex = nextIndex;
+
   state.turn += 1;
   state.actionsPlayedThisTurn = 0;
   state.phase = 'TURN_START';
@@ -471,7 +513,7 @@ function playRentCard(
   // 孖展炒樓 (DOUBLE_RENT) boosts the printed rent before macro-event modifiers apply on top,
   // e.g. $3M base * DOUBLE_RENT * 突發加息 (x0.5) = $3M, not $2M.
   const boostedBaseRent = baseRent * (state.pendingRentMultiplier ?? 1);
-  const amount = calculateEffectiveRent(boostedBaseRent, propertyCards, state.activeMacroEvents);
+  const amount = applyBattleRoyaleMultiplier(state, calculateEffectiveRent(boostedBaseRent, propertyCards, state.activeMacroEvents));
   state.pendingRentMultiplier = undefined;
 
   state.discardPile.push(card);
@@ -481,7 +523,7 @@ function playRentCard(
     ? [singleOpponent.id]
     : target?.playerId && target.playerId !== player.id
       ? [target.playerId]
-      : state.players.filter((p) => p.id !== player.id).map((p) => p.id);
+      : state.players.filter((p) => p.id !== player.id && !p.eliminated).map((p) => p.id);
 
   openReactionWindow(state, { card, sourcePlayerId: player.id, targetQueue, amount }, events);
 }
@@ -512,7 +554,7 @@ function playActionCard(
       if (
         !opponent ||
         !color ||
-        opponent.field[color].length < COMPLETE_SET_SIZE ||
+        propertyCount(opponent, color) < COMPLETE_SET_SIZE ||
         isNailHouseProtected(opponent, color)
       ) {
         player.hand.push(card);
@@ -536,7 +578,7 @@ function playActionCard(
         !opponent ||
         !cardId ||
         !color ||
-        opponent.field[color].length >= COMPLETE_SET_SIZE ||
+        propertyCount(opponent, color) >= COMPLETE_SET_SIZE ||
         isNailHouseProtected(opponent, color)
       ) {
         player.hand.push(card);
@@ -564,7 +606,7 @@ function playActionCard(
         !offeredCardId ||
         !targetColor ||
         !offeredColor ||
-        opponent.field[targetColor].length >= COMPLETE_SET_SIZE ||
+        propertyCount(opponent, targetColor) >= COMPLETE_SET_SIZE ||
         isNailHouseProtected(opponent, targetColor)
       ) {
         player.hand.push(card);
@@ -583,8 +625,9 @@ function playActionCard(
     case 'BIRTHDAY': {
       state.discardPile.push(card);
       state.actionsPlayedThisTurn += 1;
-      const targetQueue = state.players.filter((p) => p.id !== player.id).map((p) => p.id);
-      openReactionWindow(state, { card, sourcePlayerId: player.id, targetQueue, amount: card.value }, events);
+      const targetQueue = state.players.filter((p) => p.id !== player.id && !p.eliminated).map((p) => p.id);
+      const amount = applyBattleRoyaleMultiplier(state, card.value);
+      openReactionWindow(state, { card, sourcePlayerId: player.id, targetQueue, amount }, events);
       return;
     }
     case 'DEBT_COLLECTOR': {
@@ -598,7 +641,7 @@ function playActionCard(
       state.actionsPlayedThisTurn += 1;
       openReactionWindow(
         state,
-        { card, sourcePlayerId: player.id, targetQueue: [opponent.id], amount: DEBT_COLLECTOR_AMOUNT },
+        { card, sourcePlayerId: player.id, targetQueue: [opponent.id], amount: applyBattleRoyaleMultiplier(state, DEBT_COLLECTOR_AMOUNT) },
         events,
       );
       return;
@@ -827,18 +870,23 @@ function playActionCard(
 
 function resolveOpponent(state: GameState, player: Player, target: PlayCardTarget | undefined): Player | undefined {
   if (!target?.playerId || target.playerId === player.id) return undefined;
-  return findPlayer(state, target.playerId);
+  const opponent = findPlayer(state, target.playerId);
+  // An eliminated (BATTLE_ROYALE-only) player owns nothing and is out of the game — no card
+  // should be able to target them for anything.
+  return opponent?.eliminated ? undefined : opponent;
 }
 
 type NewPendingReaction = Omit<PendingReaction, 'currentResponderId' | 'cancelled'>;
 
 function openReactionWindow(state: GameState, pending: NewPendingReaction, events: GameEvent[]): void {
   const firstTarget = pending.targetQueue[0];
-  state.pendingReaction = { ...pending, currentResponderId: firstTarget ?? pending.sourcePlayerId, cancelled: false };
+  // An empty queue (e.g. BATTLE_ROYALE eliminated every other player in one stroke) has nothing
+  // to react to — stay in ACTION rather than opening a window nobody can ever legally respond to.
+  // The caller already counted this as one of the turn's actions before calling in.
+  if (!firstTarget) return;
+  state.pendingReaction = { ...pending, currentResponderId: firstTarget, cancelled: false };
   state.phase = 'REACTION_WINDOW';
-  if (firstTarget) {
-    events.push({ type: 'REACTION_REQUESTED', playerId: firstTarget, card: pending.card });
-  }
+  events.push({ type: 'REACTION_REQUESTED', playerId: firstTarget, card: pending.card });
 }
 
 // --- REACTION_WINDOW -----------------------------------------------------
@@ -907,7 +955,7 @@ function handleRespond(
     if (marketTop) state.discardPile.push(marketTop);
 
     const source = findPlayer(state, pending.sourcePlayerId);
-    if (source) chargePlayer(source, responder, pending.amount ?? pending.card.value, undefined, events);
+    if (source) chargePlayer(state, source, responder, pending.amount ?? pending.card.value, undefined, events);
     events.push({ type: 'REACTION_RESOLVED', playerId: responder.id, response: 'COUNTER' });
 
     pending.targetQueue = pending.targetQueue.slice(1);
@@ -959,14 +1007,14 @@ function resolvePendingEffectForTarget(
   if (!source) return;
 
   if (pending.card.type === 'RENT') {
-    chargePlayer(target, source, pending.amount ?? 0, paymentCardIds, events);
+    chargePlayer(state, target, source, pending.amount ?? 0, paymentCardIds, events);
     return;
   }
 
   switch (pending.card.actionType) {
     case 'BIRTHDAY':
     case 'DEBT_COLLECTOR':
-      chargePlayer(target, source, pending.amount ?? pending.card.value, paymentCardIds, events);
+      chargePlayer(state, target, source, pending.amount ?? pending.card.value, paymentCardIds, events);
       return;
     case 'PICKPOCKET': {
       if (target.hand.length === 0) {

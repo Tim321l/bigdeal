@@ -120,6 +120,21 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
       if (result.value.started) runBotsAndBroadcast(session.roomId);
     });
 
+    socket.on('room:setMode', ({ mode }, ack) => {
+      const session = sessions.get(socket.id);
+      if (!session) {
+        ack({ ok: false, error: 'Join a room first.' });
+        return;
+      }
+      const result = roomManager.setMode(session.roomId, session.lobbyId, mode);
+      if (!result.ok) {
+        ack({ ok: false, error: result.error });
+        return;
+      }
+      ack({ ok: true, data: {} });
+      broadcastRoomSummary(session.roomId);
+    });
+
     socket.on('room:addBot', ({ level }, ack) => {
       const session = sessions.get(socket.id);
       if (!session) {

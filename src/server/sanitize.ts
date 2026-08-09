@@ -1,5 +1,6 @@
 import type {
   Card,
+  GameMode,
   GameState,
   MacroEvent,
   PendingReaction,
@@ -16,9 +17,11 @@ export interface SanitizedPlayer {
   hand?: Card[];
   field: Record<PropertyColor, Card[]>;
   bank: Card[];
+  eliminated?: boolean;
 }
 
 export interface SanitizedGameState {
+  mode: GameMode;
   turn: number;
   activePlayerIndex: number;
   players: SanitizedPlayer[];
@@ -44,6 +47,7 @@ function sanitizePlayer(player: Player, viewerPlayerId: string): SanitizedPlayer
     ...(isSelf ? { hand: player.hand } : {}),
     field: player.field,
     bank: player.bank,
+    ...(player.eliminated ? { eliminated: true } : {}),
   };
 }
 
@@ -54,6 +58,7 @@ function sanitizePlayer(player: Player, viewerPlayerId: string): SanitizedPlayer
  */
 export function sanitizeStateFor(state: GameState, viewerPlayerId: string): SanitizedGameState {
   return {
+    mode: state.mode,
     turn: state.turn,
     activePlayerIndex: state.activePlayerIndex,
     players: state.players.map((player) => sanitizePlayer(player, viewerPlayerId)),

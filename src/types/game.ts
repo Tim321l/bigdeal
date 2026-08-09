@@ -52,7 +52,15 @@ export interface Player {
   hand: Card[];
   field: Record<PropertyColor, Card[]>;
   bank: Card[];
+  /** BATTLE_ROYALE only: set once a charge they can't cover strips them of everything. Turn
+   * rotation skips eliminated players; CLASSIC mode never sets this. */
+  eliminated?: boolean;
 }
+
+/** CLASSIC: first to 3 complete sets wins. BATTLE_ROYALE: rent/money-demand amounts are doubled
+ * and a payer who can't cover a charge is eliminated (everything they own transfers to the
+ * collector) — last player standing wins. */
+export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE';
 
 export type ModifierTarget = 'RENT' | 'ACTION_LIMIT' | 'DRAW_COUNT';
 export type ModifierOperator = 'ADD' | 'MULTIPLY' | 'OVERRIDE';
@@ -109,6 +117,7 @@ export interface PendingReaction {
 }
 
 export interface GameState {
+  mode: GameMode;
   turn: number;
   activePlayerIndex: number;
   players: Player[];
@@ -161,6 +170,7 @@ export type GameEvent =
   | { type: 'BANK_RENT_LAUNDERED'; playerId: string; cardId: string }
   | { type: 'BANK_CARD_SEIZED'; fromPlayerId: string; toPlayerId: string; cardId: string }
   | { type: 'CARD_BURIED'; playerId: string; cardId: string }
+  | { type: 'PLAYER_ELIMINATED'; playerId: string; collectorId: string }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

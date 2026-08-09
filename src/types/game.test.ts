@@ -20,6 +20,7 @@ describe('game types', () => {
     };
 
     const state: GameState = {
+      mode: 'CLASSIC',
       turn: 1,
       activePlayerIndex: 0,
       players: [player],

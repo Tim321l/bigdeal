@@ -4,6 +4,7 @@ import type {
   ActionPayload,
   ClientToServerEvents,
   GameEvent,
+  GameMode,
   RoomSummary,
   SanitizedGameState,
   ServerToClientEvents,
@@ -156,6 +157,20 @@ export function useGameConnection() {
     });
   }, []);
 
+  const setMode = useCallback((mode: GameMode) => {
+    return new Promise<void>((resolve) => {
+      const socket = socketRef.current;
+      if (!socket) {
+        resolve();
+        return;
+      }
+      socket.emit('room:setMode', { mode }, (result) => {
+        if (!result.ok) setError(result.error);
+        resolve();
+      });
+    });
+  }, []);
+
   const addBot = useCallback((level: 1 | 2 | 3) => {
     return new Promise<void>((resolve) => {
       const socket = socketRef.current;
@@ -211,6 +226,7 @@ export function useGameConnection() {
     createRoom,
     joinRoom,
     setReady,
+    setMode,
     sendIntent,
     addBot,
     removeBot,

@@ -14,6 +14,7 @@ const card = (id: string): Card => ({ id, name: id, type: 'MONEY', value: 1 });
 
 function makeState(): GameState {
   return {
+    mode: 'CLASSIC',
     turn: 3,
     activePlayerIndex: 0,
     players: [
