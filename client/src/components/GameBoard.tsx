@@ -100,6 +100,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
                   isActive={p.id === activePlayer?.id}
                   isConnected={connectedOf(p.id)}
                   botLevel={botLevelOf(p.id)}
+                  activeMacroEvents={game.activeMacroEvents}
                 />
               ))}
             </section>
@@ -258,6 +259,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
                 isConnected={connectedOf(p.id)}
                 botLevel={botLevelOf(p.id)}
                 isTeammate={teammate?.id === p.id}
+                activeMacroEvents={game.activeMacroEvents}
               />
             ))}
           </section>
@@ -272,7 +274,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
               </span>
             </FloatingDelta>
           </div>
-          <PropertyField field={me.field} />
+          <PropertyField field={me.field} activeMacroEvents={game.activeMacroEvents} />
           <PlayerHand
             hand={me.hand ?? []}
             canAct={canAct}

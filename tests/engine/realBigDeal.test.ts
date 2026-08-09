@@ -285,10 +285,17 @@ describe('REAL_BIG_DEAL mode', () => {
       pendingTileDecision: { playerId: 'player-1', tileIndex: TRANSPORT_TILE, kind: 'TRANSIT' },
     });
 
+    // Charging every opponent now opens a real reaction window (Just Say No / Counter / a
+    // payment choice) instead of deducting straight away — same as every other rent path.
     const { nextState, events } = applyAction(state, { type: 'COLLECT_TRANSIT_RENT', playerId: 'player-1' });
-    expect(events.some((e) => e.type === 'RENT_CHARGED')).toBe(true);
-    expect(nextState.players[0]?.bank.length).toBeGreaterThan(0);
-    expect(nextState.phase).toBe('TURN_START');
+    expect(events.some((e) => e.type === 'REACTION_REQUESTED' && e.playerId === 'player-2')).toBe(true);
+    expect(nextState.phase).toBe('REACTION_WINDOW');
+    expect(nextState.players[0]?.bank.length).toBe(0);
+
+    const responded = applyAction(nextState, { type: 'RESPOND', playerId: 'player-2', response: 'ACCEPT' });
+    expect(responded.events.some((e) => e.type === 'RENT_CHARGED')).toBe(true);
+    expect(responded.nextState.players[0]?.bank.length).toBeGreaterThan(0);
+    expect(responded.nextState.phase).toBe('TURN_START');
 
     const noTransit = makeState({
       mode: 'REAL_BIG_DEAL',
@@ -334,6 +341,30 @@ describe('REAL_BIG_DEAL mode', () => {
     const paid = applyAction(rolled.nextState, { type: 'RESPOND', playerId: 'player-1', response: 'ACCEPT' });
     expect(paid.events).toContainEqual({ type: 'PLAYER_ELIMINATED', playerId: 'player-1', collectorId: 'player-2' });
     expect(paid.nextState.players[0]?.eliminated).toBe(true);
+  });
+
+  it('goes bankrupt based on bank cash alone, even while holding a hand full of valuable cards', () => {
+    const seed = 13;
+    const startPosition = positionBeforeRoll(seed, PROPERTY_TILE);
+    // Alice's bank is empty, but her hand alone is worth far more than the rent owed — only bank
+    // cash counts toward what a player can pay, so she still goes bankrupt.
+    const alice = makePlayer('player-1', 'Alice', {
+      position: startPosition,
+      bank: [],
+      hand: [cardById('commercial-ifc'), cardById('commercial-k11')],
+    });
+    const bob = makePlayer('player-2', 'Bob', {
+      position: 0,
+      field: { ...makeField(), OLD_TONG_LAU: [cardById('tong-lau-nga-tsin-wai-road')] },
+    });
+    const state = makeState({ mode: 'REAL_BIG_DEAL', phase: 'ROLL', players: [alice, bob], rngSeed: seed });
+
+    const rolled = applyAction(state, { type: 'ROLL_DICE', playerId: 'player-1' });
+    const paid = applyAction(rolled.nextState, { type: 'RESPOND', playerId: 'player-1', response: 'ACCEPT' });
+    expect(paid.events).toContainEqual({ type: 'PLAYER_ELIMINATED', playerId: 'player-1', collectorId: 'player-2' });
+    expect(paid.nextState.players[0]?.eliminated).toBe(true);
+    // Bankruptcy still sweeps everything — the hand cards go to the collector's bank too.
+    expect(paid.nextState.players[1]?.bank.length).toBeGreaterThanOrEqual(2);
   });
 
   it('wins on 3 complete sets or by bankrupting every other player, whichever comes first', () => {

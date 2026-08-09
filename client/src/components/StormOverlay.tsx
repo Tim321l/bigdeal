@@ -17,7 +17,7 @@ export function StormOverlay({ events }: { events: GameEvent[] }) {
     if (!stormy) return;
 
     setActive(true);
-    const timer = setTimeout(() => setActive(false), 2600);
+    const timer = setTimeout(() => setActive(false), 4500);
     return () => clearTimeout(timer);
   }, [events]);
 
@@ -26,8 +26,8 @@ export function StormOverlay({ events }: { events: GameEvent[] }) {
       Array.from({ length: 24 }, (_, i) => ({
         id: i,
         left: Math.random() * 100,
-        delay: Math.random() * 1,
-        duration: 0.6 + Math.random() * 0.5,
+        delay: Math.random() * 1.8,
+        duration: 1 + Math.random() * 0.8,
       })),
     [],
   );

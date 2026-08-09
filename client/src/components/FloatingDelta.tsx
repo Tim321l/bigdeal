@@ -20,7 +20,7 @@ export function FloatingDelta({ value, children }: FloatingDeltaProps) {
     const delta = value - prev;
     const key = Date.now();
     setPopups((p) => [...p, { key, delta }]);
-    const timer = setTimeout(() => setPopups((p) => p.filter((x) => x.key !== key)), 1100);
+    const timer = setTimeout(() => setPopups((p) => p.filter((x) => x.key !== key)), 1800);
     return () => clearTimeout(timer);
   }, [value]);
 

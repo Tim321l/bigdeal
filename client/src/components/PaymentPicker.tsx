@@ -8,17 +8,16 @@ interface PaymentPickerProps {
    * payer doesn't lose track of it after the modal-to-modal transition from ReactionPrompt. */
   context: string;
   bank: Card[];
-  hand: Card[];
   onConfirm: (cardIds: string[]) => void;
   onCancel: () => void;
 }
 
-/** Lets the payer pick which of their own cards to hand over, matching real Monopoly Deal rules
- * — you choose what to give up (maybe a property you don't want) rather than the game deciding
- * for you. Confirm is disabled until the selection covers the debt (or everything, if you can't). */
-export function PaymentPicker({ amount, context, bank, hand, onConfirm, onCancel }: PaymentPickerProps) {
+/** Lets the payer pick which of their own bank cards to hand over — only bank cash counts toward
+ * rent/debt charges, hand cards are never spent this way. Confirm is disabled until the selection
+ * covers the debt (or everything, if the bank can't cover it). */
+export function PaymentPicker({ amount, context, bank, onConfirm, onCancel }: PaymentPickerProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const payable = [...bank, ...hand];
+  const payable = bank;
   const totalAvailable = payable.reduce((sum, card) => sum + card.value, 0);
   const requiredMinimum = Math.min(amount, totalAvailable);
   const selectedTotal = payable.filter((card) => selected.has(card.id)).reduce((sum, card) => sum + card.value, 0);
@@ -39,11 +38,11 @@ export function PaymentPicker({ amount, context, bank, hand, onConfirm, onCancel
         <h3>要俾 ${amount}M——揀邊啲卡找數</h3>
         <p className="card-info__meta">{context}</p>
         {payable.length === 0 ? (
-          <p>你手頭同銀行都冇卡,唔使俾。</p>
+          <p>你銀行冇錢,唔使俾(手牌唔算數)。</p>
         ) : (
           <>
             <p className="card-info__meta">
-              你有 ${totalAvailable}M 可以用(銀行 + 手牌)。
+              你銀行有 ${totalAvailable}M 可以用(手牌唔算數)。
               {totalAvailable < amount ? '唔夠數,要俾晒先可以確認。' : `最少要揀夠 $${requiredMinimum}M。`}
             </p>
             <div className="modal__list modal__list--cards">

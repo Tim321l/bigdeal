@@ -220,8 +220,9 @@ function autoPickPayment(available: Card[], amount: number): Card[] {
 }
 
 /** Tiered rent (by same-color property count) plus any House/Hotel flat bonus for one color's
- * field slice — shared by hand-played RENT cards and REAL_BIG_DEAL's landing-triggered board rent. */
-function computeSetRent(propertySet: Card[]): number {
+ * field slice — shared by hand-played RENT cards and REAL_BIG_DEAL's landing-triggered board rent.
+ * Exported so the client can show a live rent breakdown next to each property group. */
+export function computeSetRent(propertySet: Card[]): number {
   const propertyCards = propertySet.filter((c) => c.type === 'PROPERTY');
   const tiers = propertyCards[0]?.rentTiers;
   const tierRent = tiers?.[Math.min(propertyCards.length, tiers.length) - 1] ?? 0;
@@ -259,13 +260,16 @@ function chargePlayer(
     return;
   }
 
-  const available = [...payer.bank, ...payer.hand];
+  // Only bank cash is eligible to cover rent/debt charges — hand cards are never spent or counted
+  // toward what a player can pay, even automatically. A player can go bankrupt (or simply pay less
+  // than owed, outside BATTLE_ROYALE/REAL_BIG_DEAL) while still holding a full hand.
+  const available = payer.bank;
   const totalAvailable = available.reduce((sum, card) => sum + card.value, 0);
 
   if ((state.mode === 'BATTLE_ROYALE' || state.mode === 'REAL_BIG_DEAL') && totalAvailable < amount) {
-    // Bankrupt: can't cover the charge even handing over everything. Bank, hand, and field all
-    // transfer to the collector (including every board tile the payer owned), and the payer is
-    // out of the game for good.
+    // Bankrupt: can't cover the charge from the bank alone. Bank, hand, and field all transfer to
+    // the collector (including every board tile the payer owned), and the payer is out for good —
+    // going bankrupt still means losing everything, not just the bank.
     receiver.bank.push(...payer.bank, ...payer.hand);
     payer.bank = [];
     payer.hand = [];
@@ -294,7 +298,6 @@ function chargePlayer(
   const collected = payable.reduce((sum, card) => sum + card.value, 0);
 
   payer.bank = payer.bank.filter((card) => !paidIds.has(card.id));
-  payer.hand = payer.hand.filter((card) => !paidIds.has(card.id));
   receiver.bank.push(...payable);
 
   events.push({ type: 'RENT_CHARGED', fromPlayerId: payer.id, toPlayerId: receiver.id, amount: collected });
@@ -900,14 +903,33 @@ function handleCollectTransitRent(
   }
 
   const amount = computeSetRent(transitSet);
-  for (const opponent of state.players) {
-    if (!isOpposingPlayer(state, activePlayer, opponent)) continue;
-    chargePlayer(state, opponent, activePlayer, amount, undefined, events);
-  }
+  const opponentIds = state.players.filter((p) => isOpposingPlayer(state, activePlayer, p)).map((p) => p.id);
 
   state.pendingTileDecision = undefined;
-  state.phase = 'TURN_START';
-  checkAndRecordWinner(state, events);
+
+  if (opponentIds.length === 0) {
+    // No one left to collect from (shouldn't normally happen — the game would already be over).
+    state.phase = 'TURN_START';
+    checkAndRecordWinner(state, events);
+    return;
+  }
+
+  // Charging every opponent used to bypass reactions entirely (straight to chargePlayer, no Just
+  // Say No / Counter / payment choice) — inconsistent with every other rent-charging path in the
+  // game. Routing through the same reaction window as board-rent-on-landing fixes that; the queue
+  // mechanism already charges each target in sequence and returns to TURN_START once it's empty.
+  const transitRentCard: Card = {
+    id: `transit-rent-${state.turn}`,
+    name: '轉車站收租',
+    type: 'RENT',
+    value: 0,
+    color: 'TRANSPORT',
+  };
+  openReactionWindow(
+    state,
+    { card: transitRentCard, sourcePlayerId: activePlayer.id, targetQueue: opponentIds, amount, returnPhase: 'TURN_START' },
+    events,
+  );
 }
 
 function handleSkipTileDecision(

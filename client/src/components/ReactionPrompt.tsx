@@ -29,7 +29,6 @@ export function ReactionPrompt({ pending, sourceName, myHand, myBank, onRespond 
         amount={amount}
         context={`${sourceName} 打出咗「${pending.card.name}」`}
         bank={myBank}
-        hand={myHand}
         onConfirm={(cardIds) => onRespond('ACCEPT', cardIds)}
         onCancel={() => setShowPayment(false)}
       />

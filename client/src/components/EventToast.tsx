@@ -79,7 +79,7 @@ export function EventToast({
 
   useEffect(() => {
     if (queue.length === 0) return;
-    const timer = setTimeout(() => setQueue((prev) => prev.slice(1)), 4500);
+    const timer = setTimeout(() => setQueue((prev) => prev.slice(1)), 6000);
     return () => clearTimeout(timer);
   }, [queue]);
 

@@ -126,4 +126,38 @@ describe('player-chosen payment (paymentCardIds)', () => {
       amount: 7,
     });
   });
+
+  it('never spends hand cards to cover a charge, even if explicitly chosen or the bank is empty', () => {
+    const debtCollector = cardById('action-debt-collector'); // demands $5M
+    const alice = makePlayer('player-1', 'Alice', { hand: [debtCollector] });
+    const handOnlyMoney = cardById('money-4m-a'); // would easily cover the debt, but it's in hand
+    const bob = makePlayer('player-2', 'Bob', { bank: [], hand: [handOnlyMoney] });
+    const state = makeState({ players: [alice, bob] });
+
+    const played = applyAction(state, {
+      type: 'PLAY_CARD',
+      playerId: 'player-1',
+      cardId: debtCollector.id,
+      target: { playerId: 'player-2' },
+    });
+
+    // Explicitly "choosing" the hand card should just be ignored — it isn't in the eligible pool
+    // at all, so the chosen total is 0 < the $5M minimum and the (still bank-only) auto-pick
+    // kicks in, collecting nothing from an empty bank.
+    const result = applyAction(played.nextState, {
+      type: 'RESPOND',
+      playerId: 'player-2',
+      response: 'ACCEPT',
+      paymentCardIds: [handOnlyMoney.id],
+    });
+
+    expect(result.events).toContainEqual({
+      type: 'RENT_CHARGED',
+      fromPlayerId: 'player-2',
+      toPlayerId: 'player-1',
+      amount: 0,
+    });
+    // The hand card was never touched.
+    expect(result.nextState.players[1]?.hand.map((c) => c.id)).toEqual([handOnlyMoney.id]);
+  });
 });
