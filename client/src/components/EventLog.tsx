@@ -66,6 +66,8 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
         .join('、');
       return `🔨 ${nameOf(event.winnerId)} 以 $${event.winningBid}M 得標!(${bidSummary})`;
     }
+    case 'RAID_FAILED':
+      return '👹 回合用晒,全枱未達標 — 金融風暴獲勝,大家一齊輸咗';
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

@@ -53,9 +53,14 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
 
   const me = game.players.find((p) => p.id === myGamePlayerId) ?? null;
   // SYNDICATE: your own teammate is never a legal target for aggressive cards (server-enforced
-  // too) — 送畀隊友 in PlayerHand is the only sanctioned way to hand them something.
+  // too) — 送畀隊友 in PlayerHand is the only sanctioned way to hand them something. BOSS_RAID:
+  // nobody is ever a legal target — the whole table is co-op against the deck (mirrors
+  // isOpposingPlayer in stateManager.ts) — so the list is always empty there.
   const opponents = game.players.filter(
-    (p) => p.id !== myGamePlayerId && !(game.mode === 'SYNDICATE' && me?.teamId !== undefined && p.teamId === me.teamId),
+    (p) =>
+      p.id !== myGamePlayerId &&
+      game.mode !== 'BOSS_RAID' &&
+      !(game.mode === 'SYNDICATE' && me?.teamId !== undefined && p.teamId === me.teamId),
   );
   const opponent = opponents.find((p) => p.id === opponentId) ?? null;
 

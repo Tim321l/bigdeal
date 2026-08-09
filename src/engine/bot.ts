@@ -18,8 +18,12 @@ function fieldValue(player: Player): number {
 
 /** The bot's preferred target: whoever is closest to winning, breaking ties by total field value.
  * Eliminated players (BATTLE_ROYALE) own nothing and can't be targeted — never worth picking.
- * SYNDICATE: a bot's own teammate is never a valid attack target either. */
+ * SYNDICATE: a bot's own teammate is never a valid attack target either. BOSS_RAID: nobody is —
+ * it's pure co-op, no PvP at all, so there's no "leader" to attack (mirrors isOpposingPlayer in
+ * stateManager.ts; if this ever disagreed with the engine, a bot would deterministically retry
+ * the same illegal target forever, since invalid plays don't consume the turn's action budget). */
 function findLeader(state: GameState, excludeId: string): Player | undefined {
+  if (state.mode === 'BOSS_RAID') return undefined;
   const self = state.players.find((p) => p.id === excludeId);
   return state.players
     .filter((p) => p.id !== excludeId && !p.eliminated && !(self && p.teamId !== undefined && p.teamId === self.teamId))
@@ -257,8 +261,10 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
       return { type: 'PLAY_CARD', playerId: bot.id, cardId: rent.card.id };
     }
     if (rent && rent.card.rentScope === 'SINGLE') {
-      // Fully-wild rent only hits one opponent — aim it at whoever's winning.
-      const victim = leader ?? state.players.find((p) => p.id !== bot.id);
+      // Fully-wild rent only hits one opponent — aim it at whoever's winning. BOSS_RAID has no
+      // valid victim at all (no PvP — see findLeader), so this card just can't be played there;
+      // falls through to being banked like any other unusable card instead.
+      const victim = state.mode === 'BOSS_RAID' ? undefined : (leader ?? state.players.find((p) => p.id !== bot.id));
       if (victim) {
         const target: PlayCardTarget = { playerId: victim.id, color: rent.color };
         return { type: 'PLAY_CARD', playerId: bot.id, cardId: rent.card.id, target };

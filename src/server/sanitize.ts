@@ -42,6 +42,10 @@ export interface SanitizedGameState {
   pendingReaction?: PendingReaction;
   pendingRentMultiplier?: number;
   pendingAuction?: SanitizedPendingAuction;
+  /** BOSS_RAID only — the turn number the raid must be won by. */
+  turnLimit?: number;
+  /** BOSS_RAID only — set instead of winnerId when the turn limit expires without a win. */
+  raidFailed?: boolean;
   winnerId?: string;
   /** Which player's perspective this view was built for. */
   viewerPlayerId: string;
@@ -82,6 +86,8 @@ export function sanitizeStateFor(state: GameState, viewerPlayerId: string): Sani
     ...(state.pendingAuction
       ? { pendingAuction: { cards: state.pendingAuction.cards, submittedPlayerIds: Object.keys(state.pendingAuction.bids) } }
       : {}),
+    ...(state.turnLimit !== undefined ? { turnLimit: state.turnLimit } : {}),
+    ...(state.raidFailed !== undefined ? { raidFailed: state.raidFailed } : {}),
     ...(state.winnerId ? { winnerId: state.winnerId } : {}),
     viewerPlayerId,
   };

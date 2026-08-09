@@ -66,8 +66,12 @@ export interface Player {
  * parity); a team wins once its members' properties pool to 4 complete sets combined; teammates
  * can gift a hand card to each other and can't target each other with aggressive cards.
  * AUCTION_DRAFT: there's no draw — every turn opens with the top 3 deck cards revealed and a
- * blind cash auction (all players bid in bank cash; highest wins the lot, paying their bid). */
-export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE' | 'SYNDICATE' | 'AUCTION_DRAFT';
+ * blind cash auction (all players bid in bank cash; highest wins the lot, paying their bid).
+ * BOSS_RAID: everyone co-operates against the deck itself — a macro event is GUARANTEED every
+ * turn (not the usual 30% roll), and the whole table shares one win condition (combined bank
+ * >= $30M or combined complete sets >= 4, pooled across every player). Fail to hit it within
+ * turnLimit turns and everyone loses together. */
+export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE' | 'SYNDICATE' | 'AUCTION_DRAFT' | 'BOSS_RAID';
 
 /** AUCTION_DRAFT: the lot currently up for bid, and who has bid so far — amounts stay server-side
  * only until resolution (it's a BLIND auction), never appearing in SanitizedGameState. */
@@ -147,6 +151,11 @@ export interface GameState {
   pendingRentMultiplier?: number | undefined;
   /** AUCTION_DRAFT only — the lot currently up for bid. */
   pendingAuction?: PendingAuction | undefined;
+  /** BOSS_RAID only — the turn number the raid must be won by. */
+  turnLimit?: number | undefined;
+  /** BOSS_RAID only — set instead of winnerId when turnLimit expires without the co-op win
+   * condition met: everyone loses together, so there's no single winnerId to report. */
+  raidFailed?: boolean | undefined;
   winnerId?: string;
 }
 
@@ -195,6 +204,7 @@ export type GameEvent =
   | { type: 'AUCTION_STARTED'; cards: Card[] }
   | { type: 'BID_SUBMITTED'; playerId: string }
   | { type: 'AUCTION_RESOLVED'; winnerId: string; winningBid: number; bids: Record<string, number> }
+  | { type: 'RAID_FAILED' }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

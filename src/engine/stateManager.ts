@@ -31,6 +31,8 @@ const HOUSE_RENT_BONUS = 3;
 const HOTEL_RENT_BONUS = 4;
 /** No improvements on 交通基建 — mirrors the real game's railroad/utility restriction. */
 const NO_IMPROVEMENT_COLOR: PropertyColor = 'TRANSPORT';
+/** BOSS_RAID: the co-op win condition must be met by this turn or everyone loses together. */
+const BOSS_RAID_TURN_LIMIT = 15;
 
 function emptyField(): Record<PropertyColor, Card[]> {
   const field = {} as Record<PropertyColor, Card[]>;
@@ -78,6 +80,7 @@ export function initGame(playerNames: string[], seed: number, mode: GameMode = '
     phase: mode === 'AUCTION_DRAFT' ? 'AUCTION' : 'TURN_START',
     actionsPlayedThisTurn: 0,
     ...(mode === 'AUCTION_DRAFT' ? { pendingAuction: { cards: openingAuctionCards, bids: {} } } : {}),
+    ...(mode === 'BOSS_RAID' ? { turnLimit: BOSS_RAID_TURN_LIMIT } : {}),
   };
 }
 
@@ -105,6 +108,13 @@ export function applyAction(state: GameState, action: ActionPayload): { nextStat
       handleSubmitBid(nextState, action, events);
       break;
   }
+
+  // Centralized rather than sprinkled per-handler: BOSS_RAID's win condition (combined bank
+  // total) can be reached by simply banking a card, which no handler used to re-check after.
+  // checkAndRecordWinner is idempotent (no-ops once GAME_OVER), so calling it unconditionally
+  // here is safe even though several handlers above also call it inline for the modes that need
+  // to react to a win immediately mid-resolution (e.g. BATTLE_ROYALE elimination).
+  checkAndRecordWinner(nextState, events);
 
   return { nextState, events };
 }
@@ -254,6 +264,7 @@ function chargePlayer(
 }
 
 function checkAndRecordWinner(state: GameState, events: GameEvent[]): void {
+  if (state.phase === 'GAME_OVER') return; // idempotent — safe to call after every action now
   const winnerId = checkWinner(state);
   if (winnerId) {
     state.winnerId = winnerId;
@@ -289,6 +300,16 @@ function endTurn(state: GameState, events: GameEvent[]): void {
   state.turn += 1;
   state.actionsPlayedThisTurn = 0;
 
+  // BOSS_RAID: a win on this exact turn still takes priority — checkWinner() here just decides
+  // whether to declare failure; the actual win gets recorded normally by applyAction's
+  // centralized checkAndRecordWinner call once this function returns.
+  if (state.mode === 'BOSS_RAID' && state.turnLimit !== undefined && state.turn > state.turnLimit && !checkWinner(state)) {
+    state.phase = 'GAME_OVER';
+    state.raidFailed = true;
+    events.push({ type: 'RAID_FAILED' });
+    return;
+  }
+
   if (state.mode === 'AUCTION_DRAFT') {
     startAuction(state, events);
   } else {
@@ -313,9 +334,16 @@ function expireMacroEvents(state: GameState, events: GameEvent[]): void {
 
 /** Returns true if the drawn special effects require skipping straight to TURN_END (八號風球). */
 function maybeTriggerMacroEvent(state: GameState, events: GameEvent[]): boolean {
-  const roll = new PRNG(state.rngSeed);
-  const shouldTrigger = roll.next() < MACRO_EVENT_TRIGGER_CHANCE;
-  state.rngSeed = roll.getState();
+  // BOSS_RAID: the boss guarantees a fresh disaster every turn instead of the usual 30% roll —
+  // no PRNG consumed for the roll itself, just for which event gets picked below.
+  let shouldTrigger: boolean;
+  if (state.mode === 'BOSS_RAID') {
+    shouldTrigger = true;
+  } else {
+    const roll = new PRNG(state.rngSeed);
+    shouldTrigger = roll.next() < MACRO_EVENT_TRIGGER_CHANCE;
+    state.rngSeed = roll.getState();
+  }
   if (!shouldTrigger) return false;
 
   const activeIds = new Set(state.activeMacroEvents.map((event) => event.id));
@@ -1027,6 +1055,8 @@ function playActionCard(
 function isOpposingPlayer(state: GameState, player: Player, other: Player): boolean {
   if (other.id === player.id || other.eliminated) return false;
   if (state.mode === 'SYNDICATE' && other.teamId !== undefined && other.teamId === player.teamId) return false;
+  // BOSS_RAID: everyone's on one team against the deck — no PvP, so nobody is ever "opposing."
+  if (state.mode === 'BOSS_RAID') return false;
   return true;
 }
 

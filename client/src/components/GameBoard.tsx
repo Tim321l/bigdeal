@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { getEffectiveActionLimit } from '../../../src/engine/modifierPipeline';
 import { BASE_ACTION_LIMIT } from '../../../src/engine/stateManager';
+import { countPooledCompleteSets } from '../../../src/engine/winCondition';
 import { PHASE_LABELS } from '../labels';
 import type { ActionPayload, Card, GameEvent, PlayCardTarget, RoomSummary, SanitizedGameState } from '../types';
 import { AuctionPanel } from './AuctionPanel';
@@ -74,6 +75,8 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
 
   const winner = game.phase === 'GAME_OVER' ? game.winnerId : undefined;
   const bankTotal = me.bank.reduce((sum, card) => sum + card.value, 0);
+  const raidBankTotal = game.players.reduce((sum, p) => sum + p.bank.reduce((s, c) => s + c.value, 0), 0);
+  const raidSets = countPooledCompleteSets(game.players);
 
   const winnerPlayer = winner ? game.players.find((p) => p.id === winner) : undefined;
   const isMyWin =
@@ -98,6 +101,11 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
           {game.mode === 'BATTLE_ROYALE' && <span className="badge badge--eliminated">🔥 大逃殺閃擊戰</span>}
           {game.mode === 'SYNDICATE' && <span className="badge badge--bot">🤝 2v2 雙打{teammate ? ` · 隊友:${teammate.name}` : ''}</span>}
           {game.mode === 'AUCTION_DRAFT' && <span className="badge badge--bot">🔨 暗標拍賣</span>}
+          {game.mode === 'BOSS_RAID' && (
+            <span className="badge badge--eliminated">
+              👹 金融風暴 PVE · 回合 {game.turn}/{game.turnLimit ?? '?'} · 全枱夾埋 ${raidBankTotal}M/30M · {raidSets}/4 套
+            </span>
+          )}
           <span className="badge">{PHASE_LABELS[game.phase]}</span>
           <span>{isMyTurn ? '輪到你' : `輪到 ${activePlayer?.name ?? '?'}`}</span>
           <span>行動 {game.actionsPlayedThisTurn}/{actionLimit}</span>
@@ -200,7 +208,15 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
         />
       )}
 
-      {winner && <GameOverScreen winnerName={winnerDisplayName} isMe={isMyWin} mode={game.mode} onLeave={onLeave} />}
+      {(winner || game.raidFailed) && (
+        <GameOverScreen
+          winnerName={winnerDisplayName}
+          isMe={isMyWin}
+          mode={game.mode}
+          raidFailed={game.raidFailed ?? false}
+          onLeave={onLeave}
+        />
+      )}
     </div>
   );
 }

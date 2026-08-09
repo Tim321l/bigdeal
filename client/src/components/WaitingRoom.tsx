@@ -10,12 +10,13 @@ const BOT_LEVEL_LABELS: Record<(typeof BOT_LEVELS)[number], string> = {
   2: '中(Lv.2)',
   3: '難(Lv.3)',
 };
-const GAME_MODES: GameMode[] = ['CLASSIC', 'BATTLE_ROYALE', 'SYNDICATE', 'AUCTION_DRAFT'];
+const GAME_MODES: GameMode[] = ['CLASSIC', 'BATTLE_ROYALE', 'SYNDICATE', 'AUCTION_DRAFT', 'BOSS_RAID'];
 const GAME_MODE_LABELS: Record<GameMode, string> = {
   CLASSIC: '經典模式(儲齊 3 套)',
   BATTLE_ROYALE: '🔥 大逃殺閃擊戰(收租雙倍,破產淘汰)',
   SYNDICATE: '🤝 2v2 雙打合夥人(要啱啱 4 人)',
   AUCTION_DRAFT: '🔨 暗標拍賣(冇得抽牌,用現金搶)',
+  BOSS_RAID: '👹 金融風暴 PVE(全枱夾埋同莊家對抗,15 回合內達標)',
 };
 
 interface WaitingRoomProps {
