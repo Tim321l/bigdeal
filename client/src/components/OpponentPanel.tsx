@@ -1,4 +1,4 @@
-import type { MacroEvent, SanitizedPlayer } from '../types';
+import type { GameEvent, MacroEvent, SanitizedPlayer } from '../types';
 import { HiddenCard } from './CardView';
 import { PropertyField } from './PropertyField';
 
@@ -9,9 +9,18 @@ interface OpponentPanelProps {
   botLevel?: 1 | 2 | 3 | undefined;
   isTeammate?: boolean;
   activeMacroEvents?: MacroEvent[];
+  recentEvents?: GameEvent[];
 }
 
-export function OpponentPanel({ player, isActive, isConnected, botLevel, isTeammate, activeMacroEvents }: OpponentPanelProps) {
+export function OpponentPanel({
+  player,
+  isActive,
+  isConnected,
+  botLevel,
+  isTeammate,
+  activeMacroEvents,
+  recentEvents,
+}: OpponentPanelProps) {
   const bankTotal = player.bank.reduce((sum, card) => sum + card.value, 0);
 
   return (
@@ -37,7 +46,12 @@ export function OpponentPanel({ player, isActive, isConnected, botLevel, isTeamm
       <div className="opponent-panel__stat">
         銀行 ${bankTotal}M · {player.bank.length} 張
       </div>
-      <PropertyField field={player.field} {...(activeMacroEvents ? { activeMacroEvents } : {})} />
+      <PropertyField
+        field={player.field}
+        ownerPlayerId={player.id}
+        {...(activeMacroEvents ? { activeMacroEvents } : {})}
+        {...(recentEvents ? { recentEvents } : {})}
+      />
     </div>
   );
 }

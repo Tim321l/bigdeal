@@ -62,6 +62,9 @@ describe('釘子戶 (NAIL_HOUSE)', () => {
     });
     const state = makeState({ players: [alice, bob] });
 
+    // Bob's ESTATE set here is both complete (3 properties) AND nail-house-protected — Sly Deal
+    // only ever targets incomplete sets, so it's rejected for being complete regardless of the
+    // nail house; see the dedicated test below for Sly Deal blocked specifically BY a nail house.
     const slyResult = applyAction(state, {
       type: 'PLAY_CARD',
       playerId: 'player-1',
@@ -70,6 +73,8 @@ describe('釘子戶 (NAIL_HOUSE)', () => {
     });
     expect(slyResult.events.some((e) => e.type === 'INVALID_ACTION')).toBe(true);
 
+    // Same story as Sly Deal above: Forced Deal also only ever targets incomplete sets, so this
+    // rejection is for "complete set", not specifically the nail house — see the dedicated test.
     const forcedResult = applyAction(state, {
       type: 'PLAY_CARD',
       playerId: 'player-1',
@@ -85,6 +90,86 @@ describe('釘子戶 (NAIL_HOUSE)', () => {
       target: { playerId: 'player-2', color: 'ESTATE' },
     });
     expect(breakerResult.events.some((e) => e.type === 'INVALID_ACTION')).toBe(true);
+    expect(breakerResult.events).toContainEqual({
+      type: 'NAIL_HOUSE_DEFENDED',
+      attackerId: 'player-1',
+      targetPlayerId: 'player-2',
+      color: 'ESTATE',
+      blockedAction: 'DEAL_BREAKER',
+    });
+  });
+
+  it('fires NAIL_HOUSE_DEFENDED for Sly Deal specifically blocked by a protected INCOMPLETE set', () => {
+    // Unlike Deal Breaker/Forced Deal (which only ever target complete sets), Sly Deal targets
+    // incomplete ones — 釘子戶 can attach to an incomplete set too, so this needs its own fixture.
+    const propCard = cardById('estate-taikoo-shing');
+    const nailHouse = cardById('action-nail-house');
+    const slyDeal = cardById('action-sly-deal');
+
+    const bob = makePlayer('player-2', 'Bob', { field: { ...makeField(), ESTATE: [propCard, nailHouse] } });
+    const alice = makePlayer('player-1', 'Alice', { hand: [slyDeal] });
+    const state = makeState({ players: [alice, bob] });
+
+    const result = applyAction(state, {
+      type: 'PLAY_CARD',
+      playerId: 'player-1',
+      cardId: slyDeal.id,
+      target: { playerId: 'player-2', cardId: propCard.id },
+    });
+
+    expect(result.events).toContainEqual({
+      type: 'NAIL_HOUSE_DEFENDED',
+      attackerId: 'player-1',
+      targetPlayerId: 'player-2',
+      color: 'ESTATE',
+      blockedAction: 'SLY_DEAL',
+    });
+  });
+
+  it('fires NAIL_HOUSE_DEFENDED for Forced Deal specifically blocked by a protected INCOMPLETE set', () => {
+    const propCard = cardById('estate-taikoo-shing');
+    const nailHouse = cardById('action-nail-house');
+    const forcedDeal = cardById('action-forced-deal');
+    const myOffered = cardById('public-housing-tin-shing-yuen');
+
+    const bob = makePlayer('player-2', 'Bob', { field: { ...makeField(), ESTATE: [propCard, nailHouse] } });
+    const alice = makePlayer('player-1', 'Alice', {
+      hand: [forcedDeal],
+      field: { ...makeField(), PUBLIC_HOUSING: [myOffered] },
+    });
+    const state = makeState({ players: [alice, bob] });
+
+    const result = applyAction(state, {
+      type: 'PLAY_CARD',
+      playerId: 'player-1',
+      cardId: forcedDeal.id,
+      target: { playerId: 'player-2', cardId: propCard.id, offeredCardId: myOffered.id },
+    });
+
+    expect(result.events).toContainEqual({
+      type: 'NAIL_HOUSE_DEFENDED',
+      attackerId: 'player-1',
+      targetPlayerId: 'player-2',
+      color: 'ESTATE',
+      blockedAction: 'FORCED_DEAL',
+    });
+  });
+
+  it('does NOT fire NAIL_HOUSE_DEFENDED for an ordinary invalid target (no nail house involved)', () => {
+    const slyDeal = cardById('action-sly-deal');
+    const alice = makePlayer('player-1', 'Alice', { hand: [slyDeal] });
+    const bob = makePlayer('player-2', 'Bob'); // owns nothing at all — an unrelated invalid reason
+    const state = makeState({ players: [alice, bob] });
+
+    const result = applyAction(state, {
+      type: 'PLAY_CARD',
+      playerId: 'player-1',
+      cardId: slyDeal.id,
+      target: { playerId: 'player-2', cardId: 'estate-taikoo-shing' },
+    });
+
+    expect(result.events.some((e) => e.type === 'INVALID_ACTION')).toBe(true);
+    expect(result.events.some((e) => e.type === 'NAIL_HOUSE_DEFENDED')).toBe(false);
   });
 
   it('blocks 凶宅傳聞 but does NOT block 圍標天價維修', () => {

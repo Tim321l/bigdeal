@@ -119,3 +119,23 @@ export function playTurnNotify(): void {
   playTone(ctx, 698.46, now, 0.15); // F5
   playTone(ctx, 932.33, now + 0.1, 0.2); // Bb5
 }
+
+/** A metallic buzzy alarm burst for 釘子戶 blocking a steal attempt. */
+export function playShieldBlock(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  playTone(ctx, 220, now, 0.12, 0.14, 'square');
+  playTone(ctx, 233.08, now + 0.09, 0.12, 0.14, 'square'); // a semitone up — a dissonant "denied" buzz
+  playTone(ctx, 1200, now, 0.06, 0.06, 'triangle'); // a thin metallic ping on top
+}
+
+/** A brighter double "cha-ching" for 炒家摸頂 reversing a charge back onto its source. */
+export function playCounterDrain(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  playTone(ctx, 1046.5, now, 0.12, 0.16); // C6
+  playTone(ctx, 1318.51, now + 0.08, 0.12, 0.16); // E6
+  playTone(ctx, 1567.98, now + 0.16, 0.22, 0.18); // G6
+}

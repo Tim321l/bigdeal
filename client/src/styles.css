@@ -685,8 +685,72 @@ button {
 }
 
 .property-group__cards {
+  position: relative;
   display: flex;
   gap: 4px;
+}
+
+/* --- 釘子戶 defense shield: a steal attempt bounced off, briefly overlay the property group --- */
+
+.nail-house-shield {
+  position: absolute;
+  inset: -6px;
+  z-index: 20;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(45deg, rgba(56, 189, 248, 0.28) 0 2px, transparent 2px 14px),
+    repeating-linear-gradient(-45deg, rgba(56, 189, 248, 0.28) 0 2px, transparent 2px 14px),
+    rgba(15, 60, 90, 0.22);
+  border: 2px solid #38bdf8;
+  box-shadow: 0 0 14px 3px rgba(56, 189, 248, 0.65);
+  animation: nail-house-shield-flash 0.9s ease-out forwards;
+}
+
+.nail-house-shield__icon {
+  font-size: 1.6rem;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.9));
+  animation: nail-house-shield-pop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes nail-house-shield-pop {
+  0% {
+    transform: scale(0.2) rotate(-15deg);
+    opacity: 0;
+  }
+  35% {
+    transform: scale(1.3) rotate(4deg);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(1) rotate(0deg);
+  }
+  85% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+
+@keyframes nail-house-shield-flash {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* --- Cards --- */
@@ -1410,23 +1474,36 @@ button {
   animation: storm-overlay-fade 4.5s ease-out forwards;
 }
 
-.storm-overlay__drop {
+.storm-overlay__canvas {
   position: absolute;
-  top: -10%;
-  width: 2px;
-  height: 60px;
-  background: linear-gradient(180deg, rgba(120, 150, 200, 0), rgba(120, 150, 200, 0.55));
-  animation-name: storm-drop-fall;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
-@keyframes storm-drop-fall {
+.storm-overlay__lightning {
+  position: absolute;
+  inset: 0;
+  background: rgba(220, 230, 255, 0.55);
+  mix-blend-mode: screen;
+  animation: storm-lightning-flash 0.5s ease-out forwards;
+}
+
+@keyframes storm-lightning-flash {
   0% {
-    transform: translateY(0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  20% {
+    opacity: 0.15;
+  }
+  35% {
+    opacity: 0.85;
   }
   100% {
-    transform: translateY(120vh);
+    opacity: 0;
   }
 }
 
@@ -1440,14 +1517,158 @@ button {
   }
 }
 
+/* --- 炒家摸頂 counter-drain vortex --- */
+
+.counter-vortex {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(46, 125, 50, 0.18) 0%, rgba(46, 125, 50, 0.04) 45%, transparent 70%);
+  animation: counter-vortex-fade 0.9s ease-out forwards;
+}
+
+.counter-vortex__spiral {
+  width: min(70vmin, 520px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(46, 125, 50, 0) 0deg,
+    rgba(46, 125, 50, 0.85) 60deg,
+    rgba(102, 187, 106, 0.15) 140deg,
+    rgba(46, 125, 50, 0) 220deg,
+    rgba(46, 125, 50, 0.85) 300deg,
+    rgba(46, 125, 50, 0) 360deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 32%, black 33%, black 62%, transparent 63%);
+  mask: radial-gradient(circle, transparent 32%, black 33%, black 62%, transparent 63%);
+  animation: counter-vortex-spin 0.9s cubic-bezier(0.3, 0, 0.5, 1) forwards;
+}
+
+@keyframes counter-vortex-spin {
+  0% {
+    transform: rotate(0deg) scale(0.3);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    /* Counter-clockwise, matching "reversing the flow back to sender". */
+    transform: rotate(-540deg) scale(1.15);
+    opacity: 0;
+  }
+}
+
+@keyframes counter-vortex-fade {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- Multi-rent cascade: 2+ rent charges landing in one batch --- */
+
+.rent-cascade {
+  position: fixed;
+  top: 130px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 170;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.rent-cascade__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  animation: rent-cascade-pop 1.1s ease-out forwards;
+}
+
+.rent-cascade__label {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-panel);
+  color: var(--success);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 2px solid var(--success);
+  box-shadow: var(--shadow-lg);
+  white-space: nowrap;
+}
+
+.rent-cascade__shockwave {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(46, 125, 50, 0.6);
+  border-radius: 999px;
+  animation: rent-cascade-shockwave 0.7s ease-out forwards;
+}
+
+.rent-cascade__shockwave--delayed {
+  animation-delay: 0.12s;
+}
+
+@keyframes rent-cascade-pop {
+  0% {
+    transform: scale(0.6) translateY(-8px);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1.08) translateY(0);
+    opacity: 1;
+  }
+  35% {
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes rent-cascade-shockwave {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card-entering,
   .card-entering--slam,
   .dice-flicker,
   .confetti__piece,
   .storm-overlay,
-  .storm-overlay__drop,
-  .floating-delta__label {
+  .storm-overlay__lightning,
+  .floating-delta__label,
+  .counter-vortex,
+  .counter-vortex__spiral,
+  .rent-cascade__item,
+  .rent-cascade__shockwave,
+  .nail-house-shield,
+  .nail-house-shield__icon {
     animation: none !important;
   }
 }

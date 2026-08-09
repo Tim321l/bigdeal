@@ -1144,12 +1144,13 @@ function playActionCard(
     case 'DEAL_BREAKER': {
       const opponent = resolveOpponent(state, player, target);
       const color = target?.color;
-      if (
-        !opponent ||
-        !color ||
-        propertyCount(opponent, color) < COMPLETE_SET_SIZE ||
-        isNailHouseProtected(opponent, color)
-      ) {
+      if (opponent && color && propertyCount(opponent, color) >= COMPLETE_SET_SIZE && isNailHouseProtected(opponent, color)) {
+        player.hand.push(card);
+        events.push({ type: 'NAIL_HOUSE_DEFENDED', attackerId: player.id, targetPlayerId: opponent.id, color, blockedAction: 'DEAL_BREAKER' });
+        invalid(events, 'Deal Breaker requires targeting a complete, unprotected property set.');
+        return;
+      }
+      if (!opponent || !color || propertyCount(opponent, color) < COMPLETE_SET_SIZE) {
         player.hand.push(card);
         invalid(events, 'Deal Breaker requires targeting a complete, unprotected property set.');
         return;
@@ -1167,13 +1168,13 @@ function playActionCard(
       const opponent = resolveOpponent(state, player, target);
       const cardId = target?.cardId;
       const color = cardId && opponent ? findCardColor(opponent, cardId) : undefined;
-      if (
-        !opponent ||
-        !cardId ||
-        !color ||
-        propertyCount(opponent, color) >= COMPLETE_SET_SIZE ||
-        isNailHouseProtected(opponent, color)
-      ) {
+      if (opponent && color && propertyCount(opponent, color) < COMPLETE_SET_SIZE && isNailHouseProtected(opponent, color)) {
+        player.hand.push(card);
+        events.push({ type: 'NAIL_HOUSE_DEFENDED', attackerId: player.id, targetPlayerId: opponent.id, color, blockedAction: 'SLY_DEAL' });
+        invalid(events, 'Sly Deal requires targeting a single unprotected property outside a completed set.');
+        return;
+      }
+      if (!opponent || !cardId || !color || propertyCount(opponent, color) >= COMPLETE_SET_SIZE) {
         player.hand.push(card);
         invalid(events, 'Sly Deal requires targeting a single unprotected property outside a completed set.');
         return;
@@ -1194,13 +1195,29 @@ function playActionCard(
       const targetColor = targetCardId && opponent ? findCardColor(opponent, targetCardId) : undefined;
       const offeredColor = offeredCardId ? findCardColor(player, offeredCardId) : undefined;
       if (
+        opponent &&
+        targetColor &&
+        propertyCount(opponent, targetColor) < COMPLETE_SET_SIZE &&
+        isNailHouseProtected(opponent, targetColor)
+      ) {
+        player.hand.push(card);
+        events.push({
+          type: 'NAIL_HOUSE_DEFENDED',
+          attackerId: player.id,
+          targetPlayerId: opponent.id,
+          color: targetColor,
+          blockedAction: 'FORCED_DEAL',
+        });
+        invalid(events, 'Forced Deal requires a valid, unprotected property to offer and receive, neither in a completed set.');
+        return;
+      }
+      if (
         !opponent ||
         !targetCardId ||
         !offeredCardId ||
         !targetColor ||
         !offeredColor ||
-        propertyCount(opponent, targetColor) >= COMPLETE_SET_SIZE ||
-        isNailHouseProtected(opponent, targetColor)
+        propertyCount(opponent, targetColor) >= COMPLETE_SET_SIZE
       ) {
         player.hand.push(card);
         invalid(events, 'Forced Deal requires a valid, unprotected property to offer and receive, neither in a completed set.');

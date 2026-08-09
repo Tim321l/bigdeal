@@ -17,6 +17,8 @@ import { PlayerHand } from './PlayerHand';
 import { PropertyField } from './PropertyField';
 import { ReactionPrompt } from './ReactionPrompt';
 import { StormOverlay } from './StormOverlay';
+import { CounterVortex } from './CounterVortex';
+import { RentCascade } from './RentCascade';
 import { TargetPicker } from './TargetPicker';
 import { TileDecisionPrompt } from './TileDecisionPrompt';
 
@@ -85,6 +87,8 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
 
         <MacroEventBanner events={game.activeMacroEvents} />
         <StormOverlay events={recentEvents} />
+        <CounterVortex events={recentEvents} />
+        <RentCascade events={recentEvents} nameOf={nameOf} />
 
         <div className="game-body">
           {game.mode === 'REAL_BIG_DEAL' ? (
@@ -101,6 +105,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
                   isConnected={connectedOf(p.id)}
                   botLevel={botLevelOf(p.id)}
                   activeMacroEvents={game.activeMacroEvents}
+                  recentEvents={recentEvents}
                 />
               ))}
             </section>
@@ -243,6 +248,8 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
 
       <MacroEventBanner events={game.activeMacroEvents} />
       <StormOverlay events={recentEvents} />
+      <CounterVortex events={recentEvents} />
+      <RentCascade events={recentEvents} nameOf={nameOf} />
 
       <div className="game-body">
         {game.mode === 'REAL_BIG_DEAL' ? (
@@ -260,6 +267,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
                 botLevel={botLevelOf(p.id)}
                 isTeammate={teammate?.id === p.id}
                 activeMacroEvents={game.activeMacroEvents}
+                recentEvents={recentEvents}
               />
             ))}
           </section>
@@ -274,7 +282,12 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
               </span>
             </FloatingDelta>
           </div>
-          <PropertyField field={me.field} activeMacroEvents={game.activeMacroEvents} />
+          <PropertyField
+            field={me.field}
+            activeMacroEvents={game.activeMacroEvents}
+            ownerPlayerId={myGamePlayerId}
+            recentEvents={recentEvents}
+          />
           <PlayerHand
             hand={me.hand ?? []}
             canAct={canAct}

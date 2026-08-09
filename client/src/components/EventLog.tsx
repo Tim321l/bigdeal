@@ -86,6 +86,8 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return `🗑️ ${nameOf(event.playerId)} 手牌太多,俾咗 $${event.amountPaid}M 垃圾徵費${event.discardedCount > 0 ? `,仲棄咗 ${event.discardedCount} 張` : ''}`;
     case 'TAX_CHARGED':
       return `🏛️ ${nameOf(event.playerId)} 持有最多零散物業,俾咗 $${event.amount}M 一手空置稅`;
+    case 'NAIL_HOUSE_DEFENDED':
+      return `🔵 ${nameOf(event.attackerId)} 想搶 ${nameOf(event.targetPlayerId)} 嘅物業,但俾釘子戶擋咗返轉頭!`;
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

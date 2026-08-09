@@ -267,6 +267,13 @@ export type GameEvent =
   | { type: 'RENOVATION_SKIPPED'; playerId: string }
   | { type: 'HAND_FEE_SETTLED'; playerId: string; finedCount: number; discardedCount: number; amountPaid: number }
   | { type: 'TAX_CHARGED'; playerId: string; amount: number }
+  | {
+      type: 'NAIL_HOUSE_DEFENDED';
+      attackerId: string;
+      targetPlayerId: string;
+      color: PropertyColor;
+      blockedAction: 'DEAL_BREAKER' | 'SLY_DEAL' | 'FORCED_DEAL';
+    }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };
