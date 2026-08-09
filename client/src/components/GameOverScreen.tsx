@@ -1,3 +1,4 @@
+import { Confetti } from './Confetti';
 import type { GameMode, MatchResult } from '../types';
 
 interface GameOverScreenProps {
@@ -85,6 +86,7 @@ export function GameOverScreen({ winnerName, isMe, mode, raidFailed, history, on
 
   return (
     <div className="overlay overlay--celebrate">
+      <Confetti />
       <div className="modal modal--center">
         <h2>{title}</h2>
         <p className="modal__winner">{winnerLine}</p>

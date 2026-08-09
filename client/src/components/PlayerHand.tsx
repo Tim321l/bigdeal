@@ -1,3 +1,4 @@
+import { useEnteringIds } from '../hooks/useEnteringIds';
 import type { Card } from '../types';
 import { CardView } from './CardView';
 
@@ -71,6 +72,8 @@ function primaryLabel(card: Card): string | null {
 }
 
 export function PlayerHand({ hand, canAct, onPlay, onPlayTargeted, onGift }: PlayerHandProps) {
+  const entering = useEnteringIds(hand.map((card) => card.id));
+
   if (hand.length === 0) {
     return <p className="hand-empty">手牌係空嘅</p>;
   }
@@ -81,7 +84,7 @@ export function PlayerHand({ hand, canAct, onPlay, onPlayTargeted, onGift }: Pla
         const label = primaryLabel(card);
         const isTargeted = (card.type === 'ACTION' && !!card.actionType && TARGETED_ACTIONS.has(card.actionType)) || isWildRent(card);
         return (
-          <div key={card.id} className="hand-card">
+          <div key={card.id} className={`hand-card${entering.has(card.id) ? ' card-entering' : ''}`}>
             <CardView card={card} />
             <div className="hand-card__actions">
               {label && (

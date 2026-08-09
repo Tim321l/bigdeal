@@ -3,17 +3,20 @@ import { getEffectiveActionLimit } from '../../../src/engine/modifierPipeline';
 import { BASE_ACTION_LIMIT } from '../../../src/engine/stateManager';
 import { countPooledCompleteSets } from '../../../src/engine/winCondition';
 import { PHASE_LABELS } from '../labels';
+import { isMuted, playCardSound, playCashSound, playDiceSound, setMuted } from '../sound';
 import type { ActionPayload, Card, GameEvent, MatchResult, PlayCardTarget, RoomSummary, SanitizedGameState } from '../types';
 import { AuctionPanel } from './AuctionPanel';
 import { BoardMap } from './BoardMap';
 import { EventLog } from './EventLog';
 import { EventToast } from './EventToast';
+import { FloatingDelta } from './FloatingDelta';
 import { GameOverScreen } from './GameOverScreen';
 import { MacroEventBanner } from './MacroEventBanner';
 import { OpponentPanel } from './OpponentPanel';
 import { PlayerHand } from './PlayerHand';
 import { PropertyField } from './PropertyField';
 import { ReactionPrompt } from './ReactionPrompt';
+import { StormOverlay } from './StormOverlay';
 import { TargetPicker } from './TargetPicker';
 import { TileDecisionPrompt } from './TileDecisionPrompt';
 
@@ -30,6 +33,12 @@ interface GameBoardProps {
 export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, onFetchHistory, onLeave }: GameBoardProps) {
   const [targetingCard, setTargetingCard] = useState<Card | null>(null);
   const [history, setHistory] = useState<MatchResult[]>([]);
+  const [muted, setMutedState] = useState(isMuted());
+  const toggleMute = (): void => {
+    const next = !muted;
+    setMuted(next);
+    setMutedState(next);
+  };
 
   const isGameOver = game.phase === 'GAME_OVER';
   useEffect(() => {
@@ -57,7 +66,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
     const spectatorWinnerName = spectatorWinner ? nameOf(spectatorWinner) : '';
     return (
       <div className="game-board">
-        <EventToast events={recentEvents} nameOf={nameOf} />
+        <EventToast events={recentEvents} nameOf={nameOf} myGamePlayerId={myGamePlayerId} />
         <header className="game-header">
           <div className="game-header__status">
             <span className="badge badge--bot">👁️ 旁觀中</span>
@@ -66,17 +75,21 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
             <span>牌組剩 {game.deckCount} 張</span>
             <span>棄牌 {game.discardPile.length} 張</span>
           </div>
+          <button type="button" className="btn btn--ghost btn--small" onClick={toggleMute} aria-label={muted ? '開聲' : '靜音'}>
+            {muted ? '🔇' : '🔊'}
+          </button>
           <button type="button" className="btn btn--ghost btn--small" onClick={onLeave}>
             離開
           </button>
         </header>
 
         <MacroEventBanner events={game.activeMacroEvents} />
+        <StormOverlay events={recentEvents} />
 
         <div className="game-body">
           {game.mode === 'REAL_BIG_DEAL' ? (
             <section className="board-section">
-              <BoardMap game={game} myGamePlayerId={myGamePlayerId} />
+              <BoardMap game={game} myGamePlayerId={myGamePlayerId} recentEvents={recentEvents} />
             </section>
           ) : (
             <section className="opponents-row">
@@ -124,6 +137,8 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
   const isMyTileDecision = game.phase === 'TILE_DECISION' && game.pendingTileDecision?.playerId === myGamePlayerId;
 
   const play = (card: Card, asBank: boolean): void => {
+    if (asBank) playCashSound();
+    else playCardSound();
     onIntent({ type: 'PLAY_CARD', playerId: myGamePlayerId, cardId: card.id, asBank });
   };
 
@@ -147,6 +162,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
   };
 
   const rollDice = (): void => {
+    playDiceSound();
     onIntent({ type: 'ROLL_DICE', playerId: myGamePlayerId });
   };
 
@@ -192,7 +208,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
 
   return (
     <div className="game-board">
-      <EventToast events={recentEvents} nameOf={nameOf} />
+      <EventToast events={recentEvents} nameOf={nameOf} myGamePlayerId={myGamePlayerId} />
       <header className="game-header">
         <div className="game-header__status">
           {game.mode === 'BATTLE_ROYALE' && <span className="badge badge--eliminated">🔥 大逃殺閃擊戰</span>}
@@ -212,6 +228,9 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
           <span>牌組剩 {game.deckCount} 張</span>
           <span>棄牌 {game.discardPile.length} 張</span>
         </div>
+        <button type="button" className="btn btn--ghost btn--small" onClick={toggleMute} aria-label={muted ? '開聲' : '靜音'}>
+          {muted ? '🔇' : '🔊'}
+        </button>
         <button type="button" className="btn btn--ghost btn--small" onClick={onLeave}>
           離開
         </button>
@@ -222,11 +241,12 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
       )}
 
       <MacroEventBanner events={game.activeMacroEvents} />
+      <StormOverlay events={recentEvents} />
 
       <div className="game-body">
         {game.mode === 'REAL_BIG_DEAL' ? (
           <section className="board-section">
-            <BoardMap game={game} myGamePlayerId={myGamePlayerId} />
+            <BoardMap game={game} myGamePlayerId={myGamePlayerId} recentEvents={recentEvents} />
           </section>
         ) : (
           <section className="opponents-row">
@@ -246,9 +266,11 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
         <section className="my-area">
           <div className="my-area__header">
             <h3>{me.name}(你)</h3>
-            <span>
-              銀行 ${bankTotal}M · {me.bank.length} 張
-            </span>
+            <FloatingDelta value={bankTotal}>
+              <span>
+                銀行 ${bankTotal}M · {me.bank.length} 張
+              </span>
+            </FloatingDelta>
           </div>
           <PropertyField field={me.field} />
           <PlayerHand

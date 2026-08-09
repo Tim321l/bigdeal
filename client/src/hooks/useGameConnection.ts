@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { playErrorBuzz } from '../sound';
 import type {
   ActionPayload,
   ClientToServerEvents,
@@ -153,7 +154,10 @@ export function useGameConnection() {
         return;
       }
       socket.emit('game:intent', { action }, (result) => {
-        if (!result.ok) setError(result.error);
+        if (!result.ok) {
+          setError(result.error);
+          playErrorBuzz();
+        }
         resolve();
       });
     });

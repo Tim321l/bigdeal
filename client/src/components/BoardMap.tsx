@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from 'react';
 import { BOARD_TILES } from '../../../src/data/board';
 import { tileCard } from '../../../src/engine/board';
-import type { PropertyColor, SanitizedGameState } from '../types';
+import type { GameEvent, PropertyColor, SanitizedGameState } from '../types';
 import { PropertyColorIcon } from './CardIcons';
 
 /** Up to 5 seats (MAX_PLAYERS) — cycles if somehow exceeded, but never will. */
@@ -27,13 +28,29 @@ function gridPosition(tileIndex: number): { row: number; col: number } {
 interface BoardMapProps {
   game: SanitizedGameState;
   myGamePlayerId: string;
+  recentEvents: GameEvent[];
 }
 
-export function BoardMap({ game, myGamePlayerId }: BoardMapProps) {
+export function BoardMap({ game, myGamePlayerId, recentEvents }: BoardMapProps) {
   const activePlayer = game.players[game.activePlayerIndex];
 
   const ownerOf = (color: PropertyColor, cardId: string) =>
     game.players.find((p) => p.field[color].some((c) => c.id === cardId));
+
+  // Briefly shows the rolled number (a cosmetic flicker — movement itself is already reflected by
+  // the token's new position once this state re-renders) whenever a fresh DICE_ROLLED event lands.
+  const [flicker, setFlicker] = useState<{ roll: number; key: number } | null>(null);
+  const prevEventsRef = useRef<GameEvent[]>([]);
+  useEffect(() => {
+    const prev = prevEventsRef.current;
+    prevEventsRef.current = recentEvents;
+    const newEvents = recentEvents.filter((e) => !prev.includes(e));
+    const rolled = newEvents.find((e): e is Extract<GameEvent, { type: 'DICE_ROLLED' }> => e.type === 'DICE_ROLLED');
+    if (!rolled) return;
+    setFlicker({ roll: rolled.roll, key: Date.now() });
+    const timer = setTimeout(() => setFlicker(null), 500);
+    return () => clearTimeout(timer);
+  }, [recentEvents]);
 
   return (
     <div className="board-wrap">
@@ -100,9 +117,15 @@ export function BoardMap({ game, myGamePlayerId }: BoardMapProps) {
           );
         })}
         <div className="board-center">
-          <span className="board-center__turn">
-            {activePlayer?.id === myGamePlayerId ? '輪到你' : `輪到 ${activePlayer?.name ?? '?'}`}
-          </span>
+          {flicker ? (
+            <span className="dice-flicker" key={flicker.key}>
+              🎲 {flicker.roll}
+            </span>
+          ) : (
+            <span className="board-center__turn">
+              {activePlayer?.id === myGamePlayerId ? '輪到你' : `輪到 ${activePlayer?.name ?? '?'}`}
+            </span>
+          )}
         </div>
       </div>
 
