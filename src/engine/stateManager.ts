@@ -594,8 +594,8 @@ function handleSubmitBid(
   action: Extract<ActionPayload, { type: 'SUBMIT_BID' }>,
   events: GameEvent[],
 ): void {
-  if (state.mode !== 'AUCTION_DRAFT') {
-    invalid(events, 'Bidding is only available in Blind Auction Draft mode.');
+  if (state.mode !== 'AUCTION_DRAFT' && state.mode !== 'REAL_BIG_DEAL') {
+    invalid(events, 'Bidding is only available in Blind Auction Draft or Real Big Deal mode.');
     return;
   }
   const auction = state.pendingAuction;
