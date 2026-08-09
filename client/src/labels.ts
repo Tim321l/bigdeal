@@ -24,6 +24,11 @@ export const ACTION_LABELS: Record<ActionType, string> = {
   MARKET_TOP: '炒家摸頂',
   RENOVATION_SCAM: '圍標天價維修',
   HAUNTED_RUMOR: '凶宅傳聞',
+  ASSET_REORG: '物業重組',
+  ATM_WITHDRAWAL: '提款機壞咗',
+  MONEY_LAUNDERING: '洗黑錢',
+  LIQUIDATOR_TAKEOVER: '接管清盤人',
+  REVERSE_MORTGAGE: '逆按揭',
 };
 
 export const PHASE_LABELS: Record<TurnPhase, string> = {
@@ -51,6 +56,11 @@ export const ACTION_DESCRIPTIONS: Record<ActionType, string> = {
   MARKET_TOP: '唔可以主動打出——收租/圍標維修/收數要你俾錢嗰陣先可以用嚟反擊:唔使俾,仲要對方倒過來俾返同額俾你。',
   RENOVATION_SCAM: '揀一位對手一套有洋樓或者酒店嘅物業,強制拆走佢嘅洋樓/酒店(改善)加成。',
   HAUNTED_RUMOR: '揀一位對手一張物業(就算已經集齊套都得),強制棄咗嗰張,可以拆散對手已集齊嘅套。',
+  ASSET_REORG: '揀自己銀行入面一張物業/洋樓/酒店,搬去物業區即時生效(要符合起樓/成套規則)——救返之前逼住入咗銀行嘅好卡。',
+  ATM_WITHDRAWAL: '由自己銀行攞返 1-2 張非現金卡(租單/功能卡)入手牌,可以再次打出嚟用。',
+  MONEY_LAUNDERING: '揀自己銀行入面一張租單卡,即場發動收租(唔使用手牌位),收完就棄咗嗰張租單。',
+  LIQUIDATOR_TAKEOVER: '揀一位對手,由佢銀行攞走一張非現金卡(功能卡/租單/物業)入你手牌——銀行入面嘅嘢人人見到,唔怕估錯。',
+  REVERSE_MORTGAGE: '揀自己銀行入面一張非現金卡放返落牌組最底,即刻補抽 3 張新手牌。',
 };
 
 /** Full plain-language description of any card, for a click-to-explain popover. */

@@ -47,6 +47,9 @@ function PickerShell({
 export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }: TargetPickerProps) {
   const [opponentId, setOpponentId] = useState<string | null>(null);
   const [opponentCardId, setOpponentCardId] = useState<string | null>(null);
+  const [reorgCardId, setReorgCardId] = useState<string | null>(null);
+  const [launderCardId, setLaunderCardId] = useState<string | null>(null);
+  const [atmSelected, setAtmSelected] = useState<Set<string>>(new Set());
 
   const me = game.players.find((p) => p.id === myGamePlayerId) ?? null;
   const opponents = game.players.filter((p) => p.id !== myGamePlayerId);
@@ -167,6 +170,206 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
     );
   }
 
+  // 物業重組: pick a bank card, then (for a colorless House/Hotel) which eligible set to attach
+  // it to — a plain property confirms straight away since it already carries its own color.
+  if (card.actionType === 'ASSET_REORG') {
+    const bankOptions = (me?.bank ?? []).filter((c) => c.type === 'PROPERTY' || c.actionType === 'HOUSE' || c.actionType === 'HOTEL');
+    const chosen = bankOptions.find((c) => c.id === reorgCardId);
+
+    if (!chosen) {
+      return (
+        <PickerShell title={`使用「${card.name}」— 揀銀行入面邊張`} onCancel={onCancel}>
+          {bankOptions.length === 0 ? (
+            <p>你銀行入面而家冇物業/洋樓/酒店可以攞返出嚟。</p>
+          ) : (
+            <div className="modal__list modal__list--cards">
+              {bankOptions.map((c) => (
+                <CardView
+                  key={c.id}
+                  card={c}
+                  onClick={() =>
+                    c.type === 'PROPERTY' && c.color
+                      ? onConfirm({ playerId: myGamePlayerId, cardId: c.id, color: c.color })
+                      : setReorgCardId(c.id)
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </PickerShell>
+      );
+    }
+
+    const eligibleColors = PROPERTY_COLORS.filter((color) => {
+      if (color === 'TRANSPORT') return false;
+      const set = me?.field[color] ?? [];
+      const propertyCount = set.filter((c) => c.type === 'PROPERTY').length;
+      const hasHouse = set.some((c) => c.actionType === 'HOUSE');
+      const hasHotel = set.some((c) => c.actionType === 'HOTEL');
+      return chosen.actionType === 'HOUSE' ? propertyCount >= COMPLETE_SET_SIZE && !hasHouse : hasHouse && !hasHotel;
+    });
+
+    return (
+      <PickerShell title={`使用「${card.name}」— 揀邊套物業`} onBack={() => setReorgCardId(null)} onCancel={onCancel}>
+        {eligibleColors.length === 0 ? (
+          <p>而家未有合資格嘅物業套。</p>
+        ) : (
+          <div className="modal__list">
+            {eligibleColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className="btn btn--block"
+                onClick={() => onConfirm({ playerId: myGamePlayerId, cardId: chosen.id, color })}
+              >
+                {COLOR_LABELS[color]}
+              </button>
+            ))}
+          </div>
+        )}
+      </PickerShell>
+    );
+  }
+
+  // 提款機壞咗: multi-select up to 2 non-cash bank cards, then confirm.
+  if (card.actionType === 'ATM_WITHDRAWAL') {
+    const bankOptions = (me?.bank ?? []).filter((c) => c.type !== 'MONEY');
+    const toggle = (id: string): void => {
+      setAtmSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else if (next.size < 2) next.add(id);
+        return next;
+      });
+    };
+    return (
+      <PickerShell title={`使用「${card.name}」— 揀最多 2 張攞返出嚟`} onCancel={onCancel}>
+        {bankOptions.length === 0 ? (
+          <p>你銀行入面而家冇非現金卡可以攞返出嚟。</p>
+        ) : (
+          <>
+            <div className="modal__list modal__list--cards">
+              {bankOptions.map((c) => (
+                <CardView key={c.id} card={c} selected={atmSelected.has(c.id)} onClick={() => toggle(c.id)} />
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={atmSelected.size === 0}
+              onClick={() => onConfirm({ playerId: myGamePlayerId, cardIds: [...atmSelected] })}
+            >
+              確認攞返 {atmSelected.size} 張
+            </button>
+          </>
+        )}
+      </PickerShell>
+    );
+  }
+
+  // 洗黑錢: pick a bank rent card, then a color (and, for the fully-wild card, an opponent too).
+  if (card.actionType === 'MONEY_LAUNDERING') {
+    const rentOptions = (me?.bank ?? []).filter((c) => c.type === 'RENT');
+    const chosen = rentOptions.find((c) => c.id === launderCardId);
+
+    if (!chosen) {
+      return (
+        <PickerShell title={`使用「${card.name}」— 揀銀行入面邊張租單`} onCancel={onCancel}>
+          {rentOptions.length === 0 ? (
+            <p>你銀行入面而家冇租單卡。</p>
+          ) : (
+            <div className="modal__list modal__list--cards">
+              {rentOptions.map((c) => (
+                <CardView
+                  key={c.id}
+                  card={c}
+                  onClick={() => (c.color ? onConfirm({ playerId: myGamePlayerId, cardId: c.id }) : setLaunderCardId(c.id))}
+                />
+              ))}
+            </div>
+          )}
+        </PickerShell>
+      );
+    }
+
+    const myEligibleColors = (chosen.wildColors ?? []).filter((color) => (me?.field[color] ?? []).some((c) => c.type === 'PROPERTY'));
+
+    if (chosen.rentScope === 'SINGLE') {
+      if (!opponent) {
+        return (
+          <PickerShell title={`使用「${card.name}」— 揀一位對手`} onBack={() => setLaunderCardId(null)} onCancel={onCancel}>
+            <div className="modal__list">
+              {opponents.map((p) => (
+                <button key={p.id} type="button" className="btn btn--block" onClick={() => setOpponentId(p.id)}>
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </PickerShell>
+        );
+      }
+      return (
+        <PickerShell title={`使用「${card.name}」— 揀收邊種顏色嘅租`} onBack={() => setOpponentId(null)} onCancel={onCancel}>
+          {myEligibleColors.length === 0 ? (
+            <p>你自己未有呢張租單涵蓋嘅任何顏色物業。</p>
+          ) : (
+            <div className="modal__list">
+              {myEligibleColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className="btn btn--block"
+                  onClick={() => onConfirm({ playerId: opponent.id, cardId: chosen.id, color })}
+                >
+                  {COLOR_LABELS[color]}
+                </button>
+              ))}
+            </div>
+          )}
+        </PickerShell>
+      );
+    }
+
+    return (
+      <PickerShell title={`使用「${card.name}」— 揀收邊種顏色嘅租`} onBack={() => setLaunderCardId(null)} onCancel={onCancel}>
+        {myEligibleColors.length === 0 ? (
+          <p>你自己未有呢張租單涵蓋嘅任何顏色物業。</p>
+        ) : (
+          <div className="modal__list">
+            {myEligibleColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className="btn btn--block"
+                onClick={() => onConfirm({ playerId: myGamePlayerId, cardId: chosen.id, color })}
+              >
+                {COLOR_LABELS[color]}
+              </button>
+            ))}
+          </div>
+        )}
+      </PickerShell>
+    );
+  }
+
+  // 逆按揭: pick one non-cash bank card to bury.
+  if (card.actionType === 'REVERSE_MORTGAGE') {
+    const bankOptions = (me?.bank ?? []).filter((c) => c.type !== 'MONEY');
+    return (
+      <PickerShell title={`使用「${card.name}」— 揀銀行入面邊張放返落牌組`} onCancel={onCancel}>
+        {bankOptions.length === 0 ? (
+          <p>你銀行入面而家冇非現金卡。</p>
+        ) : (
+          <div className="modal__list modal__list--cards">
+            {bankOptions.map((c) => (
+              <CardView key={c.id} card={c} onClick={() => onConfirm({ playerId: myGamePlayerId, cardId: c.id })} />
+            ))}
+          </div>
+        )}
+      </PickerShell>
+    );
+  }
+
   if (!opponent) {
     return (
       <PickerShell title={`使用「${card.name}」`} onCancel={onCancel}>
@@ -253,6 +456,24 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
         ) : (
           <div className="modal__list modal__list--cards">
             {targetable.map((c) => (
+              <CardView key={c.id} card={c} onClick={() => onConfirm({ playerId: opponent.id, cardId: c.id })} />
+            ))}
+          </div>
+        )}
+      </PickerShell>
+    );
+  }
+
+  if (card.actionType === 'LIQUIDATOR_TAKEOVER') {
+    // Bank contents are always public, so there's no hidden info to worry about here.
+    const seizable = opponent.bank.filter((c) => c.type !== 'MONEY');
+    return (
+      <PickerShell title={`對 ${opponent.name} 使用「${card.name}」`} onBack={() => setOpponentId(null)} onCancel={onCancel}>
+        {seizable.length === 0 ? (
+          <p>{opponent.name} 銀行入面冇非現金卡,揀第位啦。</p>
+        ) : (
+          <div className="modal__list modal__list--cards">
+            {seizable.map((c) => (
               <CardView key={c.id} card={c} onClick={() => onConfirm({ playerId: opponent.id, cardId: c.id })} />
             ))}
           </div>

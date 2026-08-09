@@ -116,6 +116,39 @@ function eligibleHotelColor(player: Player): PropertyColor | undefined {
   });
 }
 
+/** 物業重組: the first bank card that could legally be built onto the field right now. */
+function reorganizableBankCard(player: Player): { card: Card; color: PropertyColor } | undefined {
+  for (const bankCard of player.bank) {
+    if (bankCard.type === 'PROPERTY' && bankCard.color) {
+      return { card: bankCard, color: bankCard.color };
+    }
+    if (bankCard.actionType === 'HOUSE') {
+      const color = eligibleHouseColor(player);
+      if (color) return { card: bankCard, color };
+    }
+    if (bankCard.actionType === 'HOTEL') {
+      const color = eligibleHotelColor(player);
+      if (color) return { card: bankCard, color };
+    }
+  }
+  return undefined;
+}
+
+/** 洗黑錢: a RENT card sitting unused in the bank that the bot could actually charge with. */
+function launderableBankRent(player: Player): { card: Card; color: PropertyColor } | undefined {
+  for (const bankCard of player.bank) {
+    if (bankCard.type !== 'RENT') continue;
+    const color = playableRentColor(bankCard, player.field);
+    if (color) return { card: bankCard, color };
+  }
+  return undefined;
+}
+
+/** 接管清盤人: the first non-cash card in an opponent's bank (bank contents are always public). */
+function seizableBankCard(target: Player): Card | undefined {
+  return target.bank.find((c) => c.type !== 'MONEY');
+}
+
 /**
  * Picks the bot's next move for the current phase. Level 1 is a passive baseline (build if it
  * can, otherwise bank, never defends). Level 2 adds income cards, improvements, and situational
@@ -239,6 +272,24 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
       return { type: 'PLAY_CARD', playerId: bot.id, cardId: hotelCard.id, target };
     }
 
+    const assetReorg = hand.find((c) => c.actionType === 'ASSET_REORG');
+    const reorg = assetReorg ? reorganizableBankCard(bot) : undefined;
+    if (assetReorg && reorg) {
+      const target: PlayCardTarget = { playerId: bot.id, cardId: reorg.card.id, color: reorg.color };
+      return { type: 'PLAY_CARD', playerId: bot.id, cardId: assetReorg.id, target };
+    }
+
+    const moneyLaundering = hand.find((c) => c.actionType === 'MONEY_LAUNDERING');
+    const laundered = moneyLaundering ? launderableBankRent(bot) : undefined;
+    if (moneyLaundering && laundered && laundered.card.wildColors) {
+      const target: PlayCardTarget = { playerId: bot.id, cardId: laundered.card.id, color: laundered.color };
+      return { type: 'PLAY_CARD', playerId: bot.id, cardId: moneyLaundering.id, target };
+    }
+    if (moneyLaundering && laundered) {
+      const target: PlayCardTarget = { playerId: bot.id, cardId: laundered.card.id };
+      return { type: 'PLAY_CARD', playerId: bot.id, cardId: moneyLaundering.id, target };
+    }
+
     const nailHouseCard = hand.find((c) => c.actionType === 'NAIL_HOUSE');
     const nailHouseColor = nailHouseCard ? eligibleNailHouseColor(bot) : undefined;
     if (nailHouseCard && nailHouseColor) {
@@ -291,6 +342,13 @@ function decideActionPhase(state: GameState, bot: Player, level: BotLevel): Acti
         if (hauntedRumor && stigma) {
           const target: PlayCardTarget = { playerId: leader.id, cardId: stigma.card.id };
           return { type: 'PLAY_CARD', playerId: bot.id, cardId: hauntedRumor.id, target };
+        }
+
+        const liquidatorTakeover = hand.find((c) => c.actionType === 'LIQUIDATOR_TAKEOVER');
+        const seizable = liquidatorTakeover ? seizableBankCard(leader) : undefined;
+        if (liquidatorTakeover && seizable) {
+          const target: PlayCardTarget = { playerId: leader.id, cardId: seizable.id };
+          return { type: 'PLAY_CARD', playerId: bot.id, cardId: liquidatorTakeover.id, target };
         }
       }
     }

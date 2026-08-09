@@ -22,7 +22,12 @@ export type ActionType =
   | 'NAIL_HOUSE'
   | 'MARKET_TOP'
   | 'RENOVATION_SCAM'
-  | 'HAUNTED_RUMOR';
+  | 'HAUNTED_RUMOR'
+  | 'ASSET_REORG'
+  | 'ATM_WITHDRAWAL'
+  | 'MONEY_LAUNDERING'
+  | 'LIQUIDATOR_TAKEOVER'
+  | 'REVERSE_MORTGAGE';
 
 export interface Card {
   id: string;
@@ -80,10 +85,12 @@ export type TurnPhase = 'TURN_START' | 'ACTION' | 'REACTION_WINDOW' | 'TURN_END'
 export interface PlayCardTarget {
   playerId: string;
   color?: PropertyColor;
-  /** The specific field card being targeted (SLY_DEAL, FORCED_DEAL). */
+  /** The specific field/bank card being targeted (SLY_DEAL, FORCED_DEAL, and the bank-reactivation cards). */
   cardId?: string;
   /** The active player's own field card offered in exchange (FORCED_DEAL). */
   offeredCardId?: string;
+  /** Multiple own-bank cards at once (提款機壞咗 pulls up to 2). */
+  cardIds?: string[];
 }
 
 export interface PendingReaction {
@@ -150,6 +157,10 @@ export type GameEvent =
   | { type: 'PROPERTY_PROTECTED'; playerId: string; color: PropertyColor }
   | { type: 'IMPROVEMENT_STRIPPED'; fromPlayerId: string; toPlayerId: string; color: PropertyColor }
   | { type: 'PROPERTY_STIGMATIZED'; fromPlayerId: string; toPlayerId: string; cardId: string }
+  | { type: 'BANK_WITHDRAWN'; playerId: string; count: number }
+  | { type: 'BANK_RENT_LAUNDERED'; playerId: string; cardId: string }
+  | { type: 'BANK_CARD_SEIZED'; fromPlayerId: string; toPlayerId: string; cardId: string }
+  | { type: 'CARD_BURIED'; playerId: string; cardId: string }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

@@ -96,6 +96,26 @@ export const ACTION_CARDS: Card[] = [
   { id: 'action-haunted-rumor-2', name: '凶宅傳聞', type: 'ACTION', value: 3, actionType: 'HAUNTED_RUMOR' },
   { id: 'action-haunted-rumor-3', name: '凶宅傳聞', type: 'ACTION', value: 3, actionType: 'HAUNTED_RUMOR' },
 
+  // Bank reactivation: banking a card used to be a one-way trip to dead money. These five pull
+  // value back out of a bank pile (your own, or — for 接管清盤人 — an opponent's, since bank
+  // contents are always public, unlike hand).
+  { id: 'action-asset-reorg', name: '物業重組', type: 'ACTION', value: 3, actionType: 'ASSET_REORG' },
+  { id: 'action-asset-reorg-2', name: '物業重組', type: 'ACTION', value: 3, actionType: 'ASSET_REORG' },
+
+  { id: 'action-atm-withdrawal', name: '提款機壞咗', type: 'ACTION', value: 2, actionType: 'ATM_WITHDRAWAL' },
+  { id: 'action-atm-withdrawal-2', name: '提款機壞咗', type: 'ACTION', value: 2, actionType: 'ATM_WITHDRAWAL' },
+  { id: 'action-atm-withdrawal-3', name: '提款機壞咗', type: 'ACTION', value: 2, actionType: 'ATM_WITHDRAWAL' },
+
+  { id: 'action-money-laundering', name: '洗黑錢', type: 'ACTION', value: 3, actionType: 'MONEY_LAUNDERING' },
+  { id: 'action-money-laundering-2', name: '洗黑錢', type: 'ACTION', value: 3, actionType: 'MONEY_LAUNDERING' },
+
+  { id: 'action-liquidator-takeover', name: '接管清盤人', type: 'ACTION', value: 4, actionType: 'LIQUIDATOR_TAKEOVER' },
+  { id: 'action-liquidator-takeover-2', name: '接管清盤人', type: 'ACTION', value: 4, actionType: 'LIQUIDATOR_TAKEOVER' },
+
+  { id: 'action-reverse-mortgage', name: '逆按揭', type: 'ACTION', value: 2, actionType: 'REVERSE_MORTGAGE' },
+  { id: 'action-reverse-mortgage-2', name: '逆按揭', type: 'ACTION', value: 2, actionType: 'REVERSE_MORTGAGE' },
+  { id: 'action-reverse-mortgage-3', name: '逆按揭', type: 'ACTION', value: 2, actionType: 'REVERSE_MORTGAGE' },
+
   // 4 colors can be improved (TRANSPORT can't — see NO_IMPROVEMENT_COLOR), each capped at one
   // house + one hotel. Bumped again (5->8 house, 4->6 hotel) since even the first bump still felt
   // scarce across a full multiplayer game sharing one draw pool.

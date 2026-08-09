@@ -36,6 +36,8 @@ describe('card data', () => {
     const actionTypes = new Set(ACTION_CARDS.map((card) => card.actionType));
     expect([...actionTypes].sort()).toEqual(
       [
+        'ASSET_REORG',
+        'ATM_WITHDRAWAL',
         'BIRTHDAY',
         'DEAL_BREAKER',
         'DEBT_COLLECTOR',
@@ -45,11 +47,14 @@ describe('card data', () => {
         'HOTEL',
         'HOUSE',
         'JUST_SAY_NO',
+        'LIQUIDATOR_TAKEOVER',
         'MARKET_TOP',
+        'MONEY_LAUNDERING',
         'NAIL_HOUSE',
         'PASS_GO',
         'PICKPOCKET',
         'RENOVATION_SCAM',
+        'REVERSE_MORTGAGE',
         'SLY_DEAL',
       ].sort(),
     );

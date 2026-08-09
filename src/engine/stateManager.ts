@@ -418,6 +418,10 @@ function playRentCard(
   card: Card,
   target: PlayCardTarget | undefined,
   events: GameEvent[],
+  // 洗黑錢 (MONEY_LAUNDERING) activates a rent card straight out of the bank instead of the hand —
+  // if that turns out to be an invalid play, the card must bounce back to the bank it came from,
+  // not the hand it was never in. Defaults to hand for every normal hand-played rent card.
+  returnTo: Card[] = player.hand,
 ): void {
   // Single-color rent cards fix their color; wild rent cards (see cards.ts) print 2+ eligible
   // colors and let the player choose one via target.color when playing.
@@ -429,7 +433,7 @@ function playRentCard(
         ? target.color
         : undefined;
   if (!color) {
-    player.hand.push(card);
+    returnTo.push(card);
     invalid(events, eligibleColors.length > 1 ? 'Choose which color to charge rent for.' : 'Rent card missing a color.');
     return;
   }
@@ -437,7 +441,7 @@ function playRentCard(
   const propertySet = player.field[color];
   const propertyCards = propertySet.filter((c) => c.type === 'PROPERTY');
   if (propertyCards.length === 0) {
-    player.hand.push(card);
+    returnTo.push(card);
     invalid(events, 'You do not own any properties of that color.');
     return;
   }
@@ -448,7 +452,7 @@ function playRentCard(
   if (card.rentScope === 'SINGLE') {
     singleOpponent = resolveOpponent(state, player, target);
     if (!singleOpponent) {
-      player.hand.push(card);
+      returnTo.push(card);
       invalid(events, 'This rent card must target a single opponent.');
       return;
     }
@@ -706,6 +710,115 @@ function playActionCard(
       events.push({ type: 'CARDS_DRAWN', playerId: player.id, count: drawn.length });
       return;
     }
+    // --- Bank reactivation: banking a card was previously a one-way trip. These five let a
+    // player pull value back out of their own (or an opponent's) bank pile. ---
+    case 'ASSET_REORG': {
+      const cardId = target?.cardId;
+      const bankCard = cardId ? player.bank.find((c) => c.id === cardId) : undefined;
+      const buildable = bankCard && (bankCard.type === 'PROPERTY' || bankCard.actionType === 'HOUSE' || bankCard.actionType === 'HOTEL');
+      if (!bankCard || !buildable) {
+        player.hand.push(card);
+        invalid(events, 'Asset Reorganization requires choosing a property, House, or Hotel card from your own bank.');
+        return;
+      }
+
+      let color: PropertyColor | undefined;
+      if (bankCard.type === 'PROPERTY') {
+        color = bankCard.color;
+      } else {
+        const candidate = target?.color;
+        const set = candidate ? player.field[candidate] : undefined;
+        const propertyCount = set ? set.filter((c) => c.type === 'PROPERTY').length : 0;
+        const hasHouse = set?.some((c) => c.actionType === 'HOUSE') ?? false;
+        const hasHotel = set?.some((c) => c.actionType === 'HOTEL') ?? false;
+        const legal =
+          !!candidate &&
+          candidate !== NO_IMPROVEMENT_COLOR &&
+          (bankCard.actionType === 'HOUSE' ? propertyCount >= COMPLETE_SET_SIZE && !hasHouse : hasHouse && !hasHotel);
+        color = legal ? candidate : undefined;
+      }
+      if (!color) {
+        player.hand.push(card);
+        invalid(events, 'That bank card cannot legally be built right now.');
+        return;
+      }
+
+      player.bank = player.bank.filter((c) => c.id !== bankCard.id);
+      player.field[color].push(bankCard);
+      state.discardPile.push(card);
+      state.actionsPlayedThisTurn += 1;
+      events.push({ type: 'PROPERTY_BUILT', playerId: player.id, cardId: bankCard.id, color });
+      return;
+    }
+    case 'ATM_WITHDRAWAL': {
+      const ids = target?.cardIds ?? [];
+      const chosen = player.bank.filter((c) => ids.includes(c.id) && c.type !== 'MONEY');
+      if (chosen.length === 0 || chosen.length > 2) {
+        player.hand.push(card);
+        invalid(events, 'ATM Withdrawal requires choosing 1-2 non-cash cards from your own bank.');
+        return;
+      }
+      const chosenIds = new Set(chosen.map((c) => c.id));
+      player.bank = player.bank.filter((c) => !chosenIds.has(c.id));
+      player.hand.push(...chosen);
+      state.discardPile.push(card);
+      state.actionsPlayedThisTurn += 1;
+      events.push({ type: 'BANK_WITHDRAWN', playerId: player.id, count: chosen.length });
+      return;
+    }
+    case 'MONEY_LAUNDERING': {
+      const cardId = target?.cardId;
+      const bankCard = cardId ? player.bank.find((c) => c.id === cardId && c.type === 'RENT') : undefined;
+      if (!bankCard) {
+        player.hand.push(card);
+        invalid(events, 'Money Laundering requires choosing a rent card from your own bank.');
+        return;
+      }
+      // 洗黑錢 itself is spent the moment it's played, whether or not the rent card underneath
+      // turns out playable — but if that rent play is invalid, IT bounces back to the bank (not
+      // the hand it was never in) via playRentCard's returnTo parameter.
+      player.bank = player.bank.filter((c) => c.id !== bankCard.id);
+      state.discardPile.push(card);
+      events.push({ type: 'BANK_RENT_LAUNDERED', playerId: player.id, cardId: bankCard.id });
+      playRentCard(state, player, bankCard, target, events, player.bank);
+      return;
+    }
+    case 'LIQUIDATOR_TAKEOVER': {
+      const opponent = resolveOpponent(state, player, target);
+      const cardId = target?.cardId;
+      const bankCard = cardId && opponent ? opponent.bank.find((c) => c.id === cardId && c.type !== 'MONEY') : undefined;
+      if (!opponent || !target || !bankCard) {
+        player.hand.push(card);
+        invalid(events, 'Liquidator Takeover requires targeting a non-cash card in an opponent’s bank.');
+        return;
+      }
+      state.discardPile.push(card);
+      state.actionsPlayedThisTurn += 1;
+      openReactionWindow(
+        state,
+        { card, sourcePlayerId: player.id, targetQueue: [opponent.id], context: target },
+        events,
+      );
+      return;
+    }
+    case 'REVERSE_MORTGAGE': {
+      const cardId = target?.cardId;
+      const bankCard = cardId ? player.bank.find((c) => c.id === cardId && c.type !== 'MONEY') : undefined;
+      if (!bankCard) {
+        player.hand.push(card);
+        invalid(events, 'Reverse Mortgage requires choosing a non-cash card from your own bank.');
+        return;
+      }
+      player.bank = player.bank.filter((c) => c.id !== bankCard.id);
+      state.deck.unshift(bankCard);
+      state.discardPile.push(card);
+      state.actionsPlayedThisTurn += 1;
+      events.push({ type: 'CARD_BURIED', playerId: player.id, cardId: bankCard.id });
+      const drawn = drawCards(state, 3);
+      player.hand.push(...drawn);
+      events.push({ type: 'CARDS_DRAWN', playerId: player.id, count: drawn.length });
+      return;
+    }
     default:
       player.hand.push(card);
       invalid(events, 'Unsupported action card.');
@@ -925,6 +1038,17 @@ function resolvePendingEffectForTarget(
       if (!discarded) return;
       state.discardPile.push(discarded);
       events.push({ type: 'PROPERTY_STIGMATIZED', fromPlayerId: target.id, toPlayerId: source.id, cardId });
+      return;
+    }
+    case 'LIQUIDATOR_TAKEOVER': {
+      const cardId = pending.context?.cardId;
+      if (!cardId) return;
+      const index = target.bank.findIndex((c) => c.id === cardId);
+      if (index === -1) return;
+      const [seized] = target.bank.splice(index, 1);
+      if (!seized) return;
+      source.hand.push(seized);
+      events.push({ type: 'BANK_CARD_SEIZED', fromPlayerId: target.id, toPlayerId: source.id, cardId });
       return;
     }
     default:

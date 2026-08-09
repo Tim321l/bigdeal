@@ -44,6 +44,14 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return `${nameOf(event.toPlayerId)} 用圍標天價維修拆走咗 ${nameOf(event.fromPlayerId)} 嘅洋樓/酒店`;
     case 'PROPERTY_STIGMATIZED':
       return `${nameOf(event.toPlayerId)} 用凶宅傳聞逼 ${nameOf(event.fromPlayerId)} 棄咗一張物業`;
+    case 'BANK_WITHDRAWN':
+      return `${nameOf(event.playerId)} 用提款機壞咗,由銀行攞返 ${event.count} 張卡入手牌`;
+    case 'BANK_RENT_LAUNDERED':
+      return `${nameOf(event.playerId)} 洗黑錢,由銀行直接發動咗一張租單`;
+    case 'BANK_CARD_SEIZED':
+      return `${nameOf(event.toPlayerId)} 用接管清盤人,由 ${nameOf(event.fromPlayerId)} 銀行度攞走一張卡`;
+    case 'CARD_BURIED':
+      return `${nameOf(event.playerId)} 用逆按揭,將一張銀行卡放返落牌組底,補抽咗新手牌`;
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

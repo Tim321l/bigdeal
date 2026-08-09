@@ -19,6 +19,11 @@ const TARGETED_ACTIONS = new Set([
   'NAIL_HOUSE',
   'RENOVATION_SCAM',
   'HAUNTED_RUMOR',
+  'ASSET_REORG',
+  'ATM_WITHDRAWAL',
+  'MONEY_LAUNDERING',
+  'LIQUIDATOR_TAKEOVER',
+  'REVERSE_MORTGAGE',
 ]);
 
 /** Wild rent cards (2+ eligible colors) need a color picked before playing; single-color rent
@@ -50,6 +55,11 @@ function primaryLabel(card: Card): string | null {
       case 'NAIL_HOUSE':
       case 'RENOVATION_SCAM':
       case 'HAUNTED_RUMOR':
+      case 'ASSET_REORG':
+      case 'ATM_WITHDRAWAL':
+      case 'MONEY_LAUNDERING':
+      case 'LIQUIDATOR_TAKEOVER':
+      case 'REVERSE_MORTGAGE':
         return '使用(揀目標)';
       default:
         return '使用';
