@@ -5,6 +5,7 @@ import { countPooledCompleteSets } from '../../../src/engine/winCondition';
 import { PHASE_LABELS } from '../labels';
 import type { ActionPayload, Card, GameEvent, PlayCardTarget, RoomSummary, SanitizedGameState } from '../types';
 import { AuctionPanel } from './AuctionPanel';
+import { BoardMap } from './BoardMap';
 import { EventLog } from './EventLog';
 import { EventToast } from './EventToast';
 import { GameOverScreen } from './GameOverScreen';
@@ -14,6 +15,7 @@ import { PlayerHand } from './PlayerHand';
 import { PropertyField } from './PropertyField';
 import { ReactionPrompt } from './ReactionPrompt';
 import { TargetPicker } from './TargetPicker';
+import { TileDecisionPrompt } from './TileDecisionPrompt';
 
 interface GameBoardProps {
   game: SanitizedGameState;
@@ -48,7 +50,9 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
   const isReacting = game.pendingReaction?.currentResponderId === myGamePlayerId;
   const canDraw = isMyTurn && game.phase === 'TURN_START' && !game.pendingReaction;
   const canAct = isMyTurn && game.phase === 'ACTION' && !game.pendingReaction;
+  const canRoll = isMyTurn && game.phase === 'ROLL';
   const actionLimit = getEffectiveActionLimit(BASE_ACTION_LIMIT, game.activeMacroEvents);
+  const isMyTileDecision = game.phase === 'TILE_DECISION' && game.pendingTileDecision?.playerId === myGamePlayerId;
 
   const play = (card: Card, asBank: boolean): void => {
     onIntent({ type: 'PLAY_CARD', playerId: myGamePlayerId, cardId: card.id, asBank });
@@ -71,6 +75,30 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
 
   const submitBid = (amount: number): void => {
     onIntent({ type: 'SUBMIT_BID', playerId: myGamePlayerId, amount });
+  };
+
+  const rollDice = (): void => {
+    onIntent({ type: 'ROLL_DICE', playerId: myGamePlayerId });
+  };
+
+  const buyTile = (): void => {
+    onIntent({ type: 'BUY_TILE', playerId: myGamePlayerId });
+  };
+
+  const declineTile = (): void => {
+    onIntent({ type: 'DECLINE_TILE', playerId: myGamePlayerId });
+  };
+
+  const teleportTransit = (toPosition: number): void => {
+    onIntent({ type: 'TELEPORT_TRANSIT', playerId: myGamePlayerId, toPosition });
+  };
+
+  const collectTransitRent = (): void => {
+    onIntent({ type: 'COLLECT_TRANSIT_RENT', playerId: myGamePlayerId });
+  };
+
+  const skipTileDecision = (): void => {
+    onIntent({ type: 'SKIP_TILE_DECISION', playerId: myGamePlayerId });
   };
 
   const winner = game.phase === 'GAME_OVER' ? game.winnerId : undefined;
@@ -106,6 +134,9 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
               👹 金融風暴 PVE · 回合 {game.turn}/{game.turnLimit ?? '?'} · 全枱夾埋 ${raidBankTotal}M/30M · {raidSets}/4 套
             </span>
           )}
+          {game.mode === 'REAL_BIG_DEAL' && (
+            <span className="badge badge--bot">🏙️ 真實大地產 · 位置 {me.position ?? 0}</span>
+          )}
           <span className="badge">{PHASE_LABELS[game.phase]}</span>
           <span>{isMyTurn ? '輪到你' : `輪到 ${activePlayer?.name ?? '?'}`}</span>
           <span>行動 {game.actionsPlayedThisTurn}/{actionLimit}</span>
@@ -124,18 +155,24 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
       <MacroEventBanner events={game.activeMacroEvents} />
 
       <div className="game-body">
-        <section className="opponents-row">
-          {opponents.map((p) => (
-            <OpponentPanel
-              key={p.id}
-              player={p}
-              isActive={p.id === activePlayer?.id}
-              isConnected={connectedOf(p.id)}
-              botLevel={botLevelOf(p.id)}
-              isTeammate={teammate?.id === p.id}
-            />
-          ))}
-        </section>
+        {game.mode === 'REAL_BIG_DEAL' ? (
+          <section className="board-section">
+            <BoardMap game={game} myGamePlayerId={myGamePlayerId} />
+          </section>
+        ) : (
+          <section className="opponents-row">
+            {opponents.map((p) => (
+              <OpponentPanel
+                key={p.id}
+                player={p}
+                isActive={p.id === activePlayer?.id}
+                isConnected={connectedOf(p.id)}
+                botLevel={botLevelOf(p.id)}
+                isTeammate={teammate?.id === p.id}
+              />
+            ))}
+          </section>
+        )}
 
         <section className="my-area">
           <div className="my-area__header">
@@ -160,6 +197,11 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
       </div>
 
       <footer className="action-bar">
+        {game.mode === 'REAL_BIG_DEAL' && (
+          <button type="button" className="btn btn--primary" disabled={!canRoll} onClick={rollDice}>
+            🎲 擲骰
+          </button>
+        )}
         <button
           type="button"
           className="btn btn--primary"
@@ -205,6 +247,19 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
           myGamePlayerId={myGamePlayerId}
           onConfirm={confirmTarget}
           onCancel={() => setTargetingCard(null)}
+        />
+      )}
+
+      {isMyTileDecision && game.pendingTileDecision && (
+        <TileDecisionPrompt
+          pending={game.pendingTileDecision}
+          game={game}
+          myGamePlayerId={myGamePlayerId}
+          onBuy={buyTile}
+          onDecline={declineTile}
+          onTeleport={teleportTransit}
+          onCollectRent={collectTransitRent}
+          onSkip={skipTileDecision}
         />
       )}
 

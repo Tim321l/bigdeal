@@ -13,6 +13,7 @@ export function GameOverScreen({ winnerName, isMe, mode, raidFailed, onLeave }: 
   const isBattleRoyale = mode === 'BATTLE_ROYALE';
   const isSyndicate = mode === 'SYNDICATE';
   const isBossRaid = mode === 'BOSS_RAID';
+  const isRealBigDeal = mode === 'REAL_BIG_DEAL';
 
   if (isBossRaid && raidFailed) {
     return (
@@ -29,7 +30,15 @@ export function GameOverScreen({ winnerName, isMe, mode, raidFailed, onLeave }: 
     );
   }
 
-  const title = isBattleRoyale ? '🔥 遊戲結束' : isSyndicate ? '🤝 遊戲結束' : isBossRaid ? '👹 遊戲結束' : '🎉 遊戲結束';
+  const title = isBattleRoyale
+    ? '🔥 遊戲結束'
+    : isSyndicate
+      ? '🤝 遊戲結束'
+      : isBossRaid
+        ? '👹 遊戲結束'
+        : isRealBigDeal
+          ? '🏙️ 遊戲結束'
+          : '🎉 遊戲結束';
   const winnerLine = isBattleRoyale
     ? isMe
       ? '你生還到最後!'
@@ -49,7 +58,9 @@ export function GameOverScreen({ winnerName, isMe, mode, raidFailed, onLeave }: 
       ? '隊友合共集齊 4 個完整物業套。'
       : isBossRaid
         ? '全枱合共銀行結餘達 $30M,或者合共集齊 4 個完整物業套。'
-        : '已經集齊 3 個完整物業套。';
+        : isRealBigDeal
+          ? '已經集齊 3 個完整物業套,或者已經令其他所有對手破產出局。'
+          : '已經集齊 3 個完整物業套。';
 
   return (
     <div className="overlay overlay--celebrate">

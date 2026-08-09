@@ -8,6 +8,7 @@ export type {
   GameMode,
   MacroEvent,
   PendingReaction,
+  PendingTileDecision,
   PlayCardTarget,
   PropertyColor,
   TurnPhase,

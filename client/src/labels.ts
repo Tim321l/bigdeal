@@ -38,6 +38,8 @@ export const PHASE_LABELS: Record<TurnPhase, string> = {
   TURN_END: '回合結束',
   GAME_OVER: '遊戲結束',
   AUCTION: '暗標拍賣中',
+  ROLL: '待擲骰',
+  TILE_DECISION: '等待地格決定',
 };
 
 /** Plain-language explanation of what playing each action card actually does. */

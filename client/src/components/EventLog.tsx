@@ -68,6 +68,16 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
     }
     case 'RAID_FAILED':
       return '👹 回合用晒,全枱未達標 — 金融風暴獲勝,大家一齊輸咗';
+    case 'DICE_ROLLED':
+      return `🎲 ${nameOf(event.playerId)} 擲咗 ${event.roll} 點,由 ${event.fromPosition} 行到 ${event.toPosition}`;
+    case 'PASSED_GO':
+      return `🏁 ${nameOf(event.playerId)} 行過龍(起點),攞咗 $${event.amount}M`;
+    case 'TILE_PURCHASED':
+      return `🏠 ${nameOf(event.playerId)} 用 $${event.price}M 買起咗第 ${event.tileIndex} 格地皮`;
+    case 'TILE_DECLINED':
+      return `${nameOf(event.playerId)} 唔買第 ${event.tileIndex} 格地皮`;
+    case 'TRANSIT_TELEPORTED':
+      return `🚆 ${nameOf(event.playerId)} 搭去咗第 ${event.toPosition} 格交通基建`;
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':
