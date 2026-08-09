@@ -790,6 +790,31 @@ button {
 .card--type-rent.card--color-commercial-luxury { background: linear-gradient(135deg, var(--color-rent) 55%, var(--color-commercial-luxury) 55%); }
 .card--type-rent.card--color-transport { background: linear-gradient(135deg, var(--color-rent) 55%, var(--color-transport) 55%); }
 
+.card--photo {
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Negative z-index keeps the scrim behind the card's own (static, non-positioned) text spans,
+ * which otherwise paint before positioned siblings and would end up under it. */
+.card--photo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 8px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.05) 70%);
+  pointer-events: none;
+}
+
+.card-info__credit {
+  font-size: 0.65rem;
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+
 .card--hidden {
   background: repeating-linear-gradient(45deg, #8a1c2e, #8a1c2e 6px, #6e1624 6px, #6e1624 12px);
   width: 40px;

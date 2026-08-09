@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ACTION_LABELS, COLOR_LABELS, describeCard } from '../labels';
+import { PROPERTY_PHOTOS } from '../data/propertyPhotos';
 import type { Card } from '../types';
 import { ActionIcon, MoneyIcon, PropertyColorIcon } from './CardIcons';
 
@@ -28,10 +29,12 @@ function CardIcon({ card }: { card: Card }) {
 export function CardView({ card, selected, disabled, onClick }: CardViewProps) {
   const [showInfo, setShowInfo] = useState(false);
   const colorSlug = card.color ? card.color.toLowerCase().replace(/_/g, '-') : 'none';
+  const photo = card.type === 'PROPERTY' ? PROPERTY_PHOTOS[card.id] : undefined;
   const classes = [
     'card',
     `card--type-${card.type.toLowerCase()}`,
     `card--color-${colorSlug}`,
+    photo ? 'card--photo' : '',
     selected ? 'card--selected' : '',
     disabled ? 'card--disabled' : '',
     onClick ? 'card--clickable' : '',
@@ -46,7 +49,11 @@ export function CardView({ card, selected, disabled, onClick }: CardViewProps) {
     : {};
 
   return (
-    <div className={classes} {...interactiveProps}>
+    <div
+      className={classes}
+      style={photo ? { backgroundImage: `url(${photo.url})` } : undefined}
+      {...interactiveProps}
+    >
       <button
         type="button"
         className="card__info-btn"
@@ -79,6 +86,11 @@ export function CardView({ card, selected, disabled, onClick }: CardViewProps) {
               {metaText(card)} · ${card.value}M
             </p>
             <p>{describeCard(card)}</p>
+            {photo && (
+              <p className="card-info__credit">
+                圖片：Wikimedia Commons · {photo.credit} ({photo.license})
+              </p>
+            )}
             <div className="modal__footer">
               <button
                 type="button"
