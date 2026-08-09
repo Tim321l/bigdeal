@@ -62,6 +62,10 @@ export function initGame(playerNames: string[], seed: number, mode: GameMode = '
     }
   }
 
+  // AUCTION_DRAFT replaces the normal draw with a blind cash auction on the top 3 cards, open
+  // from turn 1 — there's no TURN_START/draw step in this mode at all.
+  const openingAuctionCards = mode === 'AUCTION_DRAFT' ? [deck.pop(), deck.pop(), deck.pop()].filter((c): c is Card => !!c) : [];
+
   return {
     mode,
     turn: 1,
@@ -71,8 +75,9 @@ export function initGame(playerNames: string[], seed: number, mode: GameMode = '
     discardPile: [],
     activeMacroEvents: [],
     rngSeed: rng.getState(),
-    phase: 'TURN_START',
+    phase: mode === 'AUCTION_DRAFT' ? 'AUCTION' : 'TURN_START',
     actionsPlayedThisTurn: 0,
+    ...(mode === 'AUCTION_DRAFT' ? { pendingAuction: { cards: openingAuctionCards, bids: {} } } : {}),
   };
 }
 
@@ -95,6 +100,9 @@ export function applyAction(state: GameState, action: ActionPayload): { nextStat
       break;
     case 'GIFT_CARD':
       handleGiftCard(nextState, action, events);
+      break;
+    case 'SUBMIT_BID':
+      handleSubmitBid(nextState, action, events);
       break;
   }
 
@@ -280,7 +288,12 @@ function endTurn(state: GameState, events: GameEvent[]): void {
 
   state.turn += 1;
   state.actionsPlayedThisTurn = 0;
-  state.phase = 'TURN_START';
+
+  if (state.mode === 'AUCTION_DRAFT') {
+    startAuction(state, events);
+  } else {
+    state.phase = 'TURN_START';
+  }
 }
 
 // --- TURN_START -------------------------------------------------------
@@ -487,6 +500,95 @@ function handleGiftCard(
   teammate.hand.push(card);
   state.actionsPlayedThisTurn += 1;
   events.push({ type: 'CARD_GIFTED', fromPlayerId: activePlayer.id, toPlayerId: teammate.id });
+}
+
+/** AUCTION_DRAFT: reveals the top 3 deck cards (reshuffling the discard pile in via drawCards if
+ * the deck's dry) and opens the phase every player bids into. If there's truly nothing left to
+ * auction, skips straight to the active player's ACTION phase instead of stalling on an empty lot. */
+function startAuction(state: GameState, events: GameEvent[]): void {
+  const revealed = drawCards(state, 3);
+  if (revealed.length === 0) {
+    state.phase = 'ACTION';
+    return;
+  }
+  state.pendingAuction = { cards: revealed, bids: {} };
+  state.phase = 'AUCTION';
+  events.push({ type: 'AUCTION_STARTED', cards: revealed });
+}
+
+/** AUCTION_DRAFT: every player (not just the active one) submits one blind bid in bank cash; once
+ * everyone has, the highest bid wins the lot into their hand and pays with bank cards (auto-picked
+ * cheapest-first, discarded — no change-making, matching how every other charge in this game
+ * works). Ties go to whoever's seated earliest, since that's the first entry `>` can ever beat. */
+function handleSubmitBid(
+  state: GameState,
+  action: Extract<ActionPayload, { type: 'SUBMIT_BID' }>,
+  events: GameEvent[],
+): void {
+  if (state.mode !== 'AUCTION_DRAFT') {
+    invalid(events, 'Bidding is only available in Blind Auction Draft mode.');
+    return;
+  }
+  const auction = state.pendingAuction;
+  if (state.phase !== 'AUCTION' || !auction) {
+    invalid(events, 'No auction is currently open.');
+    return;
+  }
+  const player = findPlayer(state, action.playerId);
+  if (!player || player.eliminated) {
+    invalid(events, 'Unknown or eliminated player.');
+    return;
+  }
+  if (auction.bids[player.id] !== undefined) {
+    invalid(events, 'You already placed a bid this round.');
+    return;
+  }
+
+  const bankTotal = player.bank.reduce((sum, c) => sum + c.value, 0);
+  const amount = Math.max(0, Math.floor(action.amount));
+  if (amount > bankTotal) {
+    invalid(events, 'You cannot bid more than your bank total.');
+    return;
+  }
+
+  auction.bids[player.id] = amount;
+  events.push({ type: 'BID_SUBMITTED', playerId: player.id });
+
+  const allBidded = state.players.every((p) => p.eliminated || auction.bids[p.id] !== undefined);
+  if (allBidded) resolveAuction(state, events);
+}
+
+function resolveAuction(state: GameState, events: GameEvent[]): void {
+  const auction = state.pendingAuction;
+  if (!auction) return;
+
+  let winnerId: string | undefined;
+  let winningBid = -1;
+  for (const player of state.players) {
+    const bid = auction.bids[player.id];
+    if (bid !== undefined && bid > winningBid) {
+      winningBid = bid;
+      winnerId = player.id;
+    }
+  }
+
+  const winner = winnerId ? findPlayer(state, winnerId) : undefined;
+  if (winner) {
+    winner.hand.push(...auction.cards);
+    if (winningBid > 0) {
+      const payable = autoPickPayment(winner.bank, winningBid);
+      const paidIds = new Set(payable.map((c) => c.id));
+      winner.bank = winner.bank.filter((c) => !paidIds.has(c.id));
+      state.discardPile.push(...payable);
+    }
+    events.push({ type: 'AUCTION_RESOLVED', winnerId: winner.id, winningBid: Math.max(winningBid, 0), bids: { ...auction.bids } });
+  } else {
+    // Defensive only — every non-eliminated player is required to bid, so this shouldn't happen.
+    state.discardPile.push(...auction.cards);
+  }
+
+  state.pendingAuction = undefined;
+  state.phase = 'ACTION';
 }
 
 function playProperty(state: GameState, player: Player, card: Card, events: GameEvent[]): void {

@@ -21,6 +21,13 @@ export interface SanitizedPlayer {
   teamId?: number;
 }
 
+/** AUCTION_DRAFT: the lot is public, but it's a BLIND auction — bid amounts stay server-side
+ * until AUCTION_RESOLVED reveals them all at once. Clients only learn who has bid, not how much. */
+export interface SanitizedPendingAuction {
+  cards: Card[];
+  submittedPlayerIds: string[];
+}
+
 export interface SanitizedGameState {
   mode: GameMode;
   turn: number;
@@ -34,6 +41,7 @@ export interface SanitizedGameState {
   actionsPlayedThisTurn: number;
   pendingReaction?: PendingReaction;
   pendingRentMultiplier?: number;
+  pendingAuction?: SanitizedPendingAuction;
   winnerId?: string;
   /** Which player's perspective this view was built for. */
   viewerPlayerId: string;
@@ -71,6 +79,9 @@ export function sanitizeStateFor(state: GameState, viewerPlayerId: string): Sani
     actionsPlayedThisTurn: state.actionsPlayedThisTurn,
     ...(state.pendingReaction ? { pendingReaction: state.pendingReaction } : {}),
     ...(state.pendingRentMultiplier !== undefined ? { pendingRentMultiplier: state.pendingRentMultiplier } : {}),
+    ...(state.pendingAuction
+      ? { pendingAuction: { cards: state.pendingAuction.cards, submittedPlayerIds: Object.keys(state.pendingAuction.bids) } }
+      : {}),
     ...(state.winnerId ? { winnerId: state.winnerId } : {}),
     viewerPlayerId,
   };

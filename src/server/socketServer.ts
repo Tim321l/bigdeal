@@ -16,6 +16,7 @@ const ACTION_TYPE_SET: Record<ActionPayload['type'], true> = {
   RESPOND: true,
   END_TURN: true,
   GIFT_CARD: true,
+  SUBMIT_BID: true,
 };
 
 function isValidActionPayload(data: unknown): data is ActionPayload {

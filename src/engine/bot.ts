@@ -175,7 +175,21 @@ export function decideBotAction(state: GameState, botPlayerId: string, level: Bo
     return decideActionPhase(state, bot, level);
   }
 
+  if (state.phase === 'AUCTION' && state.pendingAuction) {
+    return decideBid(state, bot, level);
+  }
+
   return { type: 'END_TURN', playerId: botPlayerId };
+}
+
+/** AUCTION_DRAFT: bid a level-scaled fraction of the bot's bank cash — deterministic, no card
+ * evaluation (every lot is 3 unseen-until-revealed cards, so there's little to differentiate on
+ * beyond "how much am I willing to risk this round"). */
+function decideBid(state: GameState, bot: Player, level: BotLevel): ActionPayload {
+  const bankTotal = bot.bank.reduce((sum, c) => sum + c.value, 0);
+  const fraction = level === 3 ? 0.5 : level === 2 ? 0.35 : 0.15;
+  const amount = Math.floor(bankTotal * fraction);
+  return { type: 'SUBMIT_BID', playerId: bot.id, amount };
 }
 
 function decideReaction(state: GameState, bot: Player, level: BotLevel): ActionPayload {

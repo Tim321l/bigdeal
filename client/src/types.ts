@@ -12,7 +12,7 @@ export type {
   PropertyColor,
   TurnPhase,
 } from '../../src/types/game';
-export type { SanitizedGameState, SanitizedPlayer } from '../../src/server/sanitize';
+export type { SanitizedGameState, SanitizedPendingAuction, SanitizedPlayer } from '../../src/server/sanitize';
 export type {
   AckResult,
   ClientToServerEvents,

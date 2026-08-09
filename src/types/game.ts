@@ -64,8 +64,17 @@ export interface Player {
  * and a payer who can't cover a charge is eliminated (everything they own transfers to the
  * collector) — last player standing wins. SYNDICATE: exactly 4 players in 2 teams of 2 (seat
  * parity); a team wins once its members' properties pool to 4 complete sets combined; teammates
- * can gift a hand card to each other and can't target each other with aggressive cards. */
-export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE' | 'SYNDICATE';
+ * can gift a hand card to each other and can't target each other with aggressive cards.
+ * AUCTION_DRAFT: there's no draw — every turn opens with the top 3 deck cards revealed and a
+ * blind cash auction (all players bid in bank cash; highest wins the lot, paying their bid). */
+export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE' | 'SYNDICATE' | 'AUCTION_DRAFT';
+
+/** AUCTION_DRAFT: the lot currently up for bid, and who has bid so far — amounts stay server-side
+ * only until resolution (it's a BLIND auction), never appearing in SanitizedGameState. */
+export interface PendingAuction {
+  cards: Card[];
+  bids: Record<string, number>;
+}
 
 export type ModifierTarget = 'RENT' | 'ACTION_LIMIT' | 'DRAW_COUNT';
 export type ModifierOperator = 'ADD' | 'MULTIPLY' | 'OVERRIDE';
@@ -93,7 +102,7 @@ export interface MacroEvent {
   specialEffects?: SpecialEffect[];
 }
 
-export type TurnPhase = 'TURN_START' | 'ACTION' | 'REACTION_WINDOW' | 'TURN_END' | 'GAME_OVER';
+export type TurnPhase = 'TURN_START' | 'ACTION' | 'REACTION_WINDOW' | 'TURN_END' | 'GAME_OVER' | 'AUCTION';
 
 export interface PlayCardTarget {
   playerId: string;
@@ -136,6 +145,8 @@ export interface GameState {
   pendingReaction?: PendingReaction | undefined;
   /** Set by 孖展炒樓 (DOUBLE_RENT); consumed by the next RENT card played this turn. */
   pendingRentMultiplier?: number | undefined;
+  /** AUCTION_DRAFT only — the lot currently up for bid. */
+  pendingAuction?: PendingAuction | undefined;
   winnerId?: string;
 }
 
@@ -152,7 +163,8 @@ export type ActionPayload =
       paymentCardIds?: string[] | undefined;
     }
   | { type: 'END_TURN'; playerId: string }
-  | { type: 'GIFT_CARD'; playerId: string; cardId: string; toPlayerId: string };
+  | { type: 'GIFT_CARD'; playerId: string; cardId: string; toPlayerId: string }
+  | { type: 'SUBMIT_BID'; playerId: string; amount: number };
 
 export type GameEvent =
   | { type: 'CARDS_DRAWN'; playerId: string; count: number }
@@ -180,6 +192,9 @@ export type GameEvent =
   /** cardId deliberately omitted — a gift moves between two hands, and even the identity of
    * "which card" is otherwise-hidden information that no third player should see in the log. */
   | { type: 'CARD_GIFTED'; fromPlayerId: string; toPlayerId: string }
+  | { type: 'AUCTION_STARTED'; cards: Card[] }
+  | { type: 'BID_SUBMITTED'; playerId: string }
+  | { type: 'AUCTION_RESOLVED'; winnerId: string; winningBid: number; bids: Record<string, number> }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

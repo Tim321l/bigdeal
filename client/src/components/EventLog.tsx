@@ -56,6 +56,16 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return `💥 ${nameOf(event.playerId)} 破產出局!所有資產轉咗畀 ${nameOf(event.collectorId)}`;
     case 'CARD_GIFTED':
       return `🤝 ${nameOf(event.fromPlayerId)} 送咗一張牌畀隊友 ${nameOf(event.toPlayerId)}`;
+    case 'AUCTION_STARTED':
+      return `🔨 新一輪暗標拍賣:${event.cards.map((c) => c.name).join('、')}`;
+    case 'BID_SUBMITTED':
+      return `${nameOf(event.playerId)} 落咗標`;
+    case 'AUCTION_RESOLVED': {
+      const bidSummary = Object.entries(event.bids)
+        .map(([playerId, amount]) => `${nameOf(playerId)} $${amount}M`)
+        .join('、');
+      return `🔨 ${nameOf(event.winnerId)} 以 $${event.winningBid}M 得標!(${bidSummary})`;
+    }
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

@@ -840,6 +840,19 @@ button {
   color: var(--accent);
 }
 
+.auction-slider {
+  width: 100%;
+  margin: 14px 0 6px;
+  accent-color: var(--accent);
+}
+
+.auction-bid-amount {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+
 .modal__list {
   display: flex;
   flex-direction: column;

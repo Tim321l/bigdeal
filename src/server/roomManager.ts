@@ -232,6 +232,13 @@ export class RoomManager {
   private currentActorId(state: GameState): string | undefined {
     if (state.phase === 'REACTION_WINDOW') return state.pendingReaction?.currentResponderId;
     if (state.phase === 'TURN_START' || state.phase === 'ACTION') return state.players[state.activePlayerIndex]?.id;
+    // AUCTION_DRAFT: everyone bids, not just the active player — drive whichever seat (bot or
+    // human) hasn't bid yet, in seat order. Once a human is next, this returns their id and the
+    // bot-driving loop above correctly stops to wait for them.
+    if (state.phase === 'AUCTION' && state.pendingAuction) {
+      const auction = state.pendingAuction;
+      return state.players.find((p) => !p.eliminated && auction.bids[p.id] === undefined)?.id;
+    }
     return undefined;
   }
 

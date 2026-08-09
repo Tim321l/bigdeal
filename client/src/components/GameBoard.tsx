@@ -3,6 +3,7 @@ import { getEffectiveActionLimit } from '../../../src/engine/modifierPipeline';
 import { BASE_ACTION_LIMIT } from '../../../src/engine/stateManager';
 import { PHASE_LABELS } from '../labels';
 import type { ActionPayload, Card, GameEvent, PlayCardTarget, RoomSummary, SanitizedGameState } from '../types';
+import { AuctionPanel } from './AuctionPanel';
 import { EventLog } from './EventLog';
 import { EventToast } from './EventToast';
 import { GameOverScreen } from './GameOverScreen';
@@ -67,6 +68,10 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
     onIntent({ type: 'RESPOND', playerId: myGamePlayerId, response, paymentCardIds });
   };
 
+  const submitBid = (amount: number): void => {
+    onIntent({ type: 'SUBMIT_BID', playerId: myGamePlayerId, amount });
+  };
+
   const winner = game.phase === 'GAME_OVER' ? game.winnerId : undefined;
   const bankTotal = me.bank.reduce((sum, card) => sum + card.value, 0);
 
@@ -92,6 +97,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
         <div className="game-header__status">
           {game.mode === 'BATTLE_ROYALE' && <span className="badge badge--eliminated">🔥 大逃殺閃擊戰</span>}
           {game.mode === 'SYNDICATE' && <span className="badge badge--bot">🤝 2v2 雙打{teammate ? ` · 隊友:${teammate.name}` : ''}</span>}
+          {game.mode === 'AUCTION_DRAFT' && <span className="badge badge--bot">🔨 暗標拍賣</span>}
           <span className="badge">{PHASE_LABELS[game.phase]}</span>
           <span>{isMyTurn ? '輪到你' : `輪到 ${activePlayer?.name ?? '?'}`}</span>
           <span>行動 {game.actionsPlayedThisTurn}/{actionLimit}</span>
@@ -163,6 +169,16 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
           完成回合
         </button>
       </footer>
+
+      {game.phase === 'AUCTION' && game.pendingAuction && (
+        <AuctionPanel
+          auction={game.pendingAuction}
+          myGamePlayerId={myGamePlayerId}
+          myBankTotal={bankTotal}
+          totalPlayers={game.players.length}
+          onSubmitBid={submitBid}
+        />
+      )}
 
       {isReacting && game.pendingReaction && (
         <ReactionPrompt
