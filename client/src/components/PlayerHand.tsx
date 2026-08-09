@@ -6,6 +6,8 @@ interface PlayerHandProps {
   canAct: boolean;
   onPlay: (card: Card, asBank: boolean) => void;
   onPlayTargeted: (card: Card) => void;
+  /** SYNDICATE only — present whenever the viewer has a live teammate to gift to. */
+  onGift?: (card: Card) => void;
 }
 
 const TARGETED_ACTIONS = new Set([
@@ -68,7 +70,7 @@ function primaryLabel(card: Card): string | null {
   return null;
 }
 
-export function PlayerHand({ hand, canAct, onPlay, onPlayTargeted }: PlayerHandProps) {
+export function PlayerHand({ hand, canAct, onPlay, onPlayTargeted, onGift }: PlayerHandProps) {
   if (hand.length === 0) {
     return <p className="hand-empty">手牌係空嘅</p>;
   }
@@ -100,6 +102,11 @@ export function PlayerHand({ hand, canAct, onPlay, onPlayTargeted }: PlayerHandP
               >
                 入銀行 ${card.value}M
               </button>
+              {onGift && (
+                <button type="button" className="btn btn--ghost btn--small" disabled={!canAct} onClick={() => onGift(card)}>
+                  🤝 送畀隊友
+                </button>
+              )}
             </div>
           </div>
         );

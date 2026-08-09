@@ -17,10 +17,12 @@ function fieldValue(player: Player): number {
 }
 
 /** The bot's preferred target: whoever is closest to winning, breaking ties by total field value.
- * Eliminated players (BATTLE_ROYALE) own nothing and can't be targeted — never worth picking. */
+ * Eliminated players (BATTLE_ROYALE) own nothing and can't be targeted — never worth picking.
+ * SYNDICATE: a bot's own teammate is never a valid attack target either. */
 function findLeader(state: GameState, excludeId: string): Player | undefined {
+  const self = state.players.find((p) => p.id === excludeId);
   return state.players
-    .filter((p) => p.id !== excludeId && !p.eliminated)
+    .filter((p) => p.id !== excludeId && !p.eliminated && !(self && p.teamId !== undefined && p.teamId === self.teamId))
     .slice()
     .sort((a, b) => countCompleteSets(b) - countCompleteSets(a) || fieldValue(b) - fieldValue(a))[0];
 }

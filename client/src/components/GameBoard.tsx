@@ -38,6 +38,11 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
     return <p className="loading">正在載入遊戲狀態…</p>;
   }
 
+  const teammate =
+    game.mode === 'SYNDICATE' && me.teamId !== undefined
+      ? game.players.find((p) => p.id !== myGamePlayerId && p.teamId === me.teamId)
+      : undefined;
+
   const isReacting = game.pendingReaction?.currentResponderId === myGamePlayerId;
   const canDraw = isMyTurn && game.phase === 'TURN_START' && !game.pendingReaction;
   const canAct = isMyTurn && game.phase === 'ACTION' && !game.pendingReaction;
@@ -45,6 +50,11 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
 
   const play = (card: Card, asBank: boolean): void => {
     onIntent({ type: 'PLAY_CARD', playerId: myGamePlayerId, cardId: card.id, asBank });
+  };
+
+  const gift = (card: Card): void => {
+    if (!teammate) return;
+    onIntent({ type: 'GIFT_CARD', playerId: myGamePlayerId, cardId: card.id, toPlayerId: teammate.id });
   };
 
   const confirmTarget = (target: PlayCardTarget): void => {
@@ -60,12 +70,28 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
   const winner = game.phase === 'GAME_OVER' ? game.winnerId : undefined;
   const bankTotal = me.bank.reduce((sum, card) => sum + card.value, 0);
 
+  const winnerPlayer = winner ? game.players.find((p) => p.id === winner) : undefined;
+  const isMyWin =
+    game.mode === 'SYNDICATE' && winnerPlayer?.teamId !== undefined
+      ? winnerPlayer.teamId === me.teamId
+      : winner === myGamePlayerId;
+  const winnerDisplayName =
+    game.mode === 'SYNDICATE' && winnerPlayer?.teamId !== undefined
+      ? game.players
+          .filter((p) => p.teamId === winnerPlayer.teamId)
+          .map((p) => p.name)
+          .join(' & ')
+      : winner
+        ? nameOf(winner)
+        : '';
+
   return (
     <div className="game-board">
       <EventToast events={recentEvents} nameOf={nameOf} />
       <header className="game-header">
         <div className="game-header__status">
           {game.mode === 'BATTLE_ROYALE' && <span className="badge badge--eliminated">🔥 大逃殺閃擊戰</span>}
+          {game.mode === 'SYNDICATE' && <span className="badge badge--bot">🤝 2v2 雙打{teammate ? ` · 隊友:${teammate.name}` : ''}</span>}
           <span className="badge">{PHASE_LABELS[game.phase]}</span>
           <span>{isMyTurn ? '輪到你' : `輪到 ${activePlayer?.name ?? '?'}`}</span>
           <span>行動 {game.actionsPlayedThisTurn}/{actionLimit}</span>
@@ -92,6 +118,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
               isActive={p.id === activePlayer?.id}
               isConnected={connectedOf(p.id)}
               botLevel={botLevelOf(p.id)}
+              isTeammate={teammate?.id === p.id}
             />
           ))}
         </section>
@@ -104,7 +131,13 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
             </span>
           </div>
           <PropertyField field={me.field} />
-          <PlayerHand hand={me.hand ?? []} canAct={canAct} onPlay={play} onPlayTargeted={setTargetingCard} />
+          <PlayerHand
+            hand={me.hand ?? []}
+            canAct={canAct}
+            onPlay={play}
+            onPlayTargeted={setTargetingCard}
+            {...(teammate ? { onGift: gift } : {})}
+          />
         </section>
 
         <aside className="sidebar">
@@ -151,7 +184,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
         />
       )}
 
-      {winner && <GameOverScreen winnerName={nameOf(winner)} isMe={winner === myGamePlayerId} mode={game.mode} onLeave={onLeave} />}
+      {winner && <GameOverScreen winnerName={winnerDisplayName} isMe={isMyWin} mode={game.mode} onLeave={onLeave} />}
     </div>
   );
 }

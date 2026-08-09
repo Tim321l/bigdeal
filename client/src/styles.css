@@ -521,6 +521,11 @@ button {
   filter: grayscale(0.8);
 }
 
+.opponent-panel--teammate {
+  border-color: var(--gold);
+  background: var(--bg-panel-alt);
+}
+
 .opponent-panel__header {
   display: flex;
   align-items: center;

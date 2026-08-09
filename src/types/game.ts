@@ -55,12 +55,17 @@ export interface Player {
   /** BATTLE_ROYALE only: set once a charge they can't cover strips them of everything. Turn
    * rotation skips eliminated players; CLASSIC mode never sets this. */
   eliminated?: boolean;
+  /** SYNDICATE only: 0 or 1, assigned by seat parity at initGame. Teammates can't be targeted by
+   * aggressive cards and their complete-set counts pool together for the win condition. */
+  teamId?: number;
 }
 
 /** CLASSIC: first to 3 complete sets wins. BATTLE_ROYALE: rent/money-demand amounts are doubled
  * and a payer who can't cover a charge is eliminated (everything they own transfers to the
- * collector) — last player standing wins. */
-export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE';
+ * collector) — last player standing wins. SYNDICATE: exactly 4 players in 2 teams of 2 (seat
+ * parity); a team wins once its members' properties pool to 4 complete sets combined; teammates
+ * can gift a hand card to each other and can't target each other with aggressive cards. */
+export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE' | 'SYNDICATE';
 
 export type ModifierTarget = 'RENT' | 'ACTION_LIMIT' | 'DRAW_COUNT';
 export type ModifierOperator = 'ADD' | 'MULTIPLY' | 'OVERRIDE';
@@ -146,7 +151,8 @@ export type ActionPayload =
        * Omitted (e.g. by bots) falls back to auto-picking the cheapest cards first. */
       paymentCardIds?: string[] | undefined;
     }
-  | { type: 'END_TURN'; playerId: string };
+  | { type: 'END_TURN'; playerId: string }
+  | { type: 'GIFT_CARD'; playerId: string; cardId: string; toPlayerId: string };
 
 export type GameEvent =
   | { type: 'CARDS_DRAWN'; playerId: string; count: number }
@@ -171,6 +177,9 @@ export type GameEvent =
   | { type: 'BANK_CARD_SEIZED'; fromPlayerId: string; toPlayerId: string; cardId: string }
   | { type: 'CARD_BURIED'; playerId: string; cardId: string }
   | { type: 'PLAYER_ELIMINATED'; playerId: string; collectorId: string }
+  /** cardId deliberately omitted — a gift moves between two hands, and even the identity of
+   * "which card" is otherwise-hidden information that no third player should see in the log. */
+  | { type: 'CARD_GIFTED'; fromPlayerId: string; toPlayerId: string }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

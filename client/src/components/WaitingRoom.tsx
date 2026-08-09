@@ -10,10 +10,11 @@ const BOT_LEVEL_LABELS: Record<(typeof BOT_LEVELS)[number], string> = {
   2: '中(Lv.2)',
   3: '難(Lv.3)',
 };
-const GAME_MODES: GameMode[] = ['CLASSIC', 'BATTLE_ROYALE'];
+const GAME_MODES: GameMode[] = ['CLASSIC', 'BATTLE_ROYALE', 'SYNDICATE'];
 const GAME_MODE_LABELS: Record<GameMode, string> = {
   CLASSIC: '經典模式(儲齊 3 套)',
   BATTLE_ROYALE: '🔥 大逃殺閃擊戰(收租雙倍,破產淘汰)',
+  SYNDICATE: '🤝 2v2 雙打合夥人(要啱啱 4 人)',
 };
 
 interface WaitingRoomProps {
@@ -30,7 +31,8 @@ export function WaitingRoom({ room, myLobbyId, onToggleReady, onSetMode, onAddBo
   const [botLevel, setBotLevel] = useState<1 | 2 | 3>(2);
   const me = room.players.find((p) => p.lobbyId === myLobbyId);
   const isHost = room.hostLobbyId === myLobbyId;
-  const canStart = room.players.length >= 2;
+  const needsExactlyFour = room.mode === 'SYNDICATE';
+  const canStart = needsExactlyFour ? room.players.length === 4 : room.players.length >= 2;
   const roomFull = room.players.length >= MAX_PLAYERS;
 
   return (
@@ -67,7 +69,13 @@ export function WaitingRoom({ room, myLobbyId, onToggleReady, onSetMode, onAddBo
         )}
       </div>
 
-      <p className="waiting-room__hint">{canStart ? '所有人 Ready 就會自動開始。' : '要至少 2 位玩家(或機械人)先可以開始。'}</p>
+      <p className="waiting-room__hint">
+        {canStart
+          ? '所有人 Ready 就會自動開始。'
+          : needsExactlyFour
+            ? `2v2 要啱啱 4 位玩家(或機械人)先可以開始,而家 ${room.players.length} 位。座位 1+3 一隊,2+4 一隊。`
+            : '要至少 2 位玩家(或機械人)先可以開始。'}
+      </p>
       <ul className="player-list">
         {room.players.map((p) => (
           <li key={p.lobbyId} className={`player-list__item${p.ready ? ' player-list__item--ready' : ''}`}>

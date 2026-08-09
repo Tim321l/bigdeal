@@ -6,12 +6,26 @@ import { sanitizeStateFor } from './sanitize';
 import { toRoomSummary } from './types';
 import type { ClientToServerEvents, ServerToClientEvents } from './types';
 
-const ACTION_TYPES = new Set(['DRAW', 'PLAY_CARD', 'RESPOND', 'END_TURN']);
+// A Record keyed by every ActionPayload['type'] instead of a bare Set<string> — if a new action
+// variant is ever added to ActionPayload without a matching entry here, this fails to typecheck
+// (missing property) instead of silently rejecting that action at runtime as "Malformed action."
+// GIFT_CARD shipped broken for exactly this reason: a hand-maintained Set never got updated.
+const ACTION_TYPE_SET: Record<ActionPayload['type'], true> = {
+  DRAW: true,
+  PLAY_CARD: true,
+  RESPOND: true,
+  END_TURN: true,
+  GIFT_CARD: true,
+};
 
 function isValidActionPayload(data: unknown): data is ActionPayload {
   if (typeof data !== 'object' || data === null) return false;
   const candidate = data as Record<string, unknown>;
-  return typeof candidate.type === 'string' && ACTION_TYPES.has(candidate.type) && typeof candidate.playerId === 'string';
+  return (
+    typeof candidate.type === 'string' &&
+    Object.hasOwn(ACTION_TYPE_SET, candidate.type) &&
+    typeof candidate.playerId === 'string'
+  );
 }
 
 interface SocketSession {

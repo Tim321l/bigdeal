@@ -7,13 +7,16 @@ interface OpponentPanelProps {
   isActive: boolean;
   isConnected: boolean;
   botLevel?: 1 | 2 | 3 | undefined;
+  isTeammate?: boolean;
 }
 
-export function OpponentPanel({ player, isActive, isConnected, botLevel }: OpponentPanelProps) {
+export function OpponentPanel({ player, isActive, isConnected, botLevel, isTeammate }: OpponentPanelProps) {
   const bankTotal = player.bank.reduce((sum, card) => sum + card.value, 0);
 
   return (
-    <div className={`opponent-panel${isActive ? ' opponent-panel--active' : ''}${player.eliminated ? ' opponent-panel--eliminated' : ''}`}>
+    <div
+      className={`opponent-panel${isActive ? ' opponent-panel--active' : ''}${player.eliminated ? ' opponent-panel--eliminated' : ''}${isTeammate ? ' opponent-panel--teammate' : ''}`}
+    >
       <div className="opponent-panel__header">
         <span className={`status-dot${isConnected ? ' status-dot--online' : ' status-dot--offline'}`} />
         <span className="opponent-panel__name">
@@ -21,6 +24,7 @@ export function OpponentPanel({ player, isActive, isConnected, botLevel }: Oppon
           {player.name}
         </span>
         {botLevel && <span className="badge badge--bot">Lv.{botLevel}</span>}
+        {isTeammate && <span className="badge badge--turn">🤝 隊友</span>}
         {player.eliminated && <span className="badge badge--eliminated">💥 已出局</span>}
         {isActive && !player.eliminated && <span className="badge badge--turn">行動中</span>}
       </div>

@@ -50,6 +50,9 @@ export function initGame(playerNames: string[], seed: number, mode: GameMode = '
     hand: [],
     field: emptyField(),
     bank: [],
+    // Seat parity gives fixed 2-person teams (seats 1&3 vs 2&4) without needing explicit
+    // team-selection UI — mirrors sitting across from your partner at a real table.
+    ...(mode === 'SYNDICATE' ? { teamId: index % 2 } : {}),
   }));
 
   for (const player of players) {
@@ -89,6 +92,9 @@ export function applyAction(state: GameState, action: ActionPayload): { nextStat
       break;
     case 'END_TURN':
       handleEndTurn(nextState, action, events);
+      break;
+    case 'GIFT_CARD':
+      handleGiftCard(nextState, action, events);
       break;
   }
 
@@ -439,6 +445,50 @@ function handlePlayCard(
   }
 }
 
+/** SYNDICATE only: hand a card straight to your teammate, no reaction window — it's a gift, not
+ * an attack. Costs one of the turn's actions like any other play. */
+function handleGiftCard(
+  state: GameState,
+  action: Extract<ActionPayload, { type: 'GIFT_CARD' }>,
+  events: GameEvent[],
+): void {
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (!activePlayer || action.playerId !== activePlayer.id) {
+    invalid(events, 'Only the active player may gift a card.');
+    return;
+  }
+  if (state.phase !== 'ACTION') {
+    invalid(events, 'Cards can only be gifted during the action phase.');
+    return;
+  }
+  if (state.mode !== 'SYNDICATE') {
+    invalid(events, 'Gifting cards is only available in 2v2 Syndicate mode.');
+    return;
+  }
+
+  const limit = getEffectiveActionLimit(BASE_ACTION_LIMIT, state.activeMacroEvents);
+  if (state.actionsPlayedThisTurn >= limit) {
+    invalid(events, 'No actions remaining this turn.');
+    return;
+  }
+
+  const teammate = findPlayer(state, action.toPlayerId);
+  if (!teammate || teammate.id === activePlayer.id || teammate.teamId !== activePlayer.teamId) {
+    invalid(events, 'You can only gift a card to your own teammate.');
+    return;
+  }
+
+  const card = removeCardFromHand(activePlayer, action.cardId);
+  if (!card) {
+    invalid(events, 'Card not found in hand.');
+    return;
+  }
+
+  teammate.hand.push(card);
+  state.actionsPlayedThisTurn += 1;
+  events.push({ type: 'CARD_GIFTED', fromPlayerId: activePlayer.id, toPlayerId: teammate.id });
+}
+
 function playProperty(state: GameState, player: Player, card: Card, events: GameEvent[]): void {
   const color = card.color;
   if (!color) {
@@ -519,11 +569,12 @@ function playRentCard(
   state.discardPile.push(card);
   state.actionsPlayedThisTurn += 1;
 
+  const explicitRentTarget = target?.playerId ? findPlayer(state, target.playerId) : undefined;
   const targetQueue = singleOpponent
     ? [singleOpponent.id]
-    : target?.playerId && target.playerId !== player.id
-      ? [target.playerId]
-      : state.players.filter((p) => p.id !== player.id && !p.eliminated).map((p) => p.id);
+    : explicitRentTarget && isOpposingPlayer(state, player, explicitRentTarget)
+      ? [explicitRentTarget.id]
+      : state.players.filter((p) => isOpposingPlayer(state, player, p)).map((p) => p.id);
 
   openReactionWindow(state, { card, sourcePlayerId: player.id, targetQueue, amount }, events);
 }
@@ -625,7 +676,7 @@ function playActionCard(
     case 'BIRTHDAY': {
       state.discardPile.push(card);
       state.actionsPlayedThisTurn += 1;
-      const targetQueue = state.players.filter((p) => p.id !== player.id && !p.eliminated).map((p) => p.id);
+      const targetQueue = state.players.filter((p) => isOpposingPlayer(state, player, p)).map((p) => p.id);
       const amount = applyBattleRoyaleMultiplier(state, card.value);
       openReactionWindow(state, { card, sourcePlayerId: player.id, targetQueue, amount }, events);
       return;
@@ -868,12 +919,20 @@ function playActionCard(
   }
 }
 
+/** True if `other` is a legal target for `player`'s aggressive cards: not themselves, not
+ * eliminated (BATTLE_ROYALE — they own nothing), and not a teammate (SYNDICATE — 秘密轉贈
+ * (GIFT_CARD) is the only sanctioned way to hand a teammate something). */
+function isOpposingPlayer(state: GameState, player: Player, other: Player): boolean {
+  if (other.id === player.id || other.eliminated) return false;
+  if (state.mode === 'SYNDICATE' && other.teamId !== undefined && other.teamId === player.teamId) return false;
+  return true;
+}
+
 function resolveOpponent(state: GameState, player: Player, target: PlayCardTarget | undefined): Player | undefined {
-  if (!target?.playerId || target.playerId === player.id) return undefined;
+  if (!target?.playerId) return undefined;
   const opponent = findPlayer(state, target.playerId);
-  // An eliminated (BATTLE_ROYALE-only) player owns nothing and is out of the game — no card
-  // should be able to target them for anything.
-  return opponent?.eliminated ? undefined : opponent;
+  if (!opponent || !isOpposingPlayer(state, player, opponent)) return undefined;
+  return opponent;
 }
 
 type NewPendingReaction = Omit<PendingReaction, 'currentResponderId' | 'cancelled'>;

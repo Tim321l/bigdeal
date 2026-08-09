@@ -18,6 +18,7 @@ export interface SanitizedPlayer {
   field: Record<PropertyColor, Card[]>;
   bank: Card[];
   eliminated?: boolean;
+  teamId?: number;
 }
 
 export interface SanitizedGameState {
@@ -48,6 +49,7 @@ function sanitizePlayer(player: Player, viewerPlayerId: string): SanitizedPlayer
     field: player.field,
     bank: player.bank,
     ...(player.eliminated ? { eliminated: true } : {}),
+    ...(player.teamId !== undefined ? { teamId: player.teamId } : {}),
   };
 }
 

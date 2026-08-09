@@ -54,6 +54,8 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return `${nameOf(event.playerId)} 用逆按揭,將一張銀行卡放返落牌組底,補抽咗新手牌`;
     case 'PLAYER_ELIMINATED':
       return `💥 ${nameOf(event.playerId)} 破產出局!所有資產轉咗畀 ${nameOf(event.collectorId)}`;
+    case 'CARD_GIFTED':
+      return `🤝 ${nameOf(event.fromPlayerId)} 送咗一張牌畀隊友 ${nameOf(event.toPlayerId)}`;
     case 'TURN_ENDED':
       return `${nameOf(event.playerId)} 完咗回合`;
     case 'GAME_WON':

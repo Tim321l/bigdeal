@@ -52,7 +52,11 @@ export function TargetPicker({ card, game, myGamePlayerId, onConfirm, onCancel }
   const [atmSelected, setAtmSelected] = useState<Set<string>>(new Set());
 
   const me = game.players.find((p) => p.id === myGamePlayerId) ?? null;
-  const opponents = game.players.filter((p) => p.id !== myGamePlayerId);
+  // SYNDICATE: your own teammate is never a legal target for aggressive cards (server-enforced
+  // too) — 送畀隊友 in PlayerHand is the only sanctioned way to hand them something.
+  const opponents = game.players.filter(
+    (p) => p.id !== myGamePlayerId && !(game.mode === 'SYNDICATE' && me?.teamId !== undefined && p.teamId === me.teamId),
+  );
   const opponent = opponents.find((p) => p.id === opponentId) ?? null;
 
   // Wild RENT cards: pick a color from the card's eligible colors that you actually own

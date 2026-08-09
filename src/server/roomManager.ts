@@ -247,11 +247,9 @@ export class RoomManager {
   }
 
   private canStart(room: Room): boolean {
-    return (
-      room.status === 'LOBBY' &&
-      room.players.length >= MIN_PLAYERS &&
-      room.players.every((p) => p.connected && p.ready)
-    );
+    // SYNDICATE needs exactly 4 for even 2v2 teams (seat parity assigns teams — see initGame).
+    const meetsPlayerCount = room.mode === 'SYNDICATE' ? room.players.length === 4 : room.players.length >= MIN_PLAYERS;
+    return room.status === 'LOBBY' && meetsPlayerCount && room.players.every((p) => p.connected && p.ready);
   }
 
   private startGame(room: Room): void {
