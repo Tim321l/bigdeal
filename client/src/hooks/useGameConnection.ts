@@ -5,6 +5,7 @@ import type {
   ClientToServerEvents,
   GameEvent,
   GameMode,
+  MatchResult,
   RoomSummary,
   SanitizedGameState,
   ServerToClientEvents,
@@ -54,6 +55,7 @@ export function useGameConnection() {
   const [recentEvents, setRecentEvents] = useState<GameEvent[]>([]);
   const [myName, setMyName] = useState<string>(loadSession()?.name ?? '');
   const [myLobbyId, setMyLobbyId] = useState<string | null>(loadSession()?.lobbyId ?? null);
+  const [isSpectating, setIsSpectating] = useState(false);
 
   useEffect(() => {
     const socket: ClientSocket = io(SERVER_URL);
@@ -185,6 +187,39 @@ export function useGameConnection() {
     });
   }, []);
 
+  const spectateRoom = useCallback((roomId: string) => {
+    return new Promise<void>((resolve) => {
+      const socket = socketRef.current;
+      if (!socket) {
+        resolve();
+        return;
+      }
+      socket.emit('room:spectate', { roomId }, (result) => {
+        if (!result.ok) {
+          setError(result.error);
+          resolve();
+          return;
+        }
+        setIsSpectating(true);
+        setError(null);
+        resolve();
+      });
+    });
+  }, []);
+
+  const getHistory = useCallback((roomId: string) => {
+    return new Promise<MatchResult[]>((resolve) => {
+      const socket = socketRef.current;
+      if (!socket) {
+        resolve([]);
+        return;
+      }
+      socket.emit('room:history', { roomId }, (result) => {
+        resolve(result.ok ? result.data.history : []);
+      });
+    });
+  }, []);
+
   const removeBot = useCallback((botLobbyId: string) => {
     return new Promise<void>((resolve) => {
       const socket = socketRef.current;
@@ -206,6 +241,7 @@ export function useGameConnection() {
     setRecentEvents([]);
     setMyName('');
     setMyLobbyId(null);
+    setIsSpectating(false);
     socketRef.current?.disconnect();
     socketRef.current?.connect();
   }, []);
@@ -220,6 +256,7 @@ export function useGameConnection() {
     recentEvents,
     myName,
     myLobbyId,
+    isSpectating,
     // The server stamps every sanitized state with the viewer it was built for — the single
     // source of truth for "which seat am I" once the game has started.
     myGamePlayerId: game?.viewerPlayerId ?? null,
@@ -230,6 +267,8 @@ export function useGameConnection() {
     sendIntent,
     addBot,
     removeBot,
+    spectateRoom,
+    getHistory,
     leaveSession,
     clearError,
   };

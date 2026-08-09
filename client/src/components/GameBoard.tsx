@@ -39,7 +39,67 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
   const botLevelOf = (id: string): 1 | 2 | 3 | undefined => room?.players.find((p) => p.gamePlayerId === id)?.bot?.level;
 
   if (!me) {
-    return <p className="loading">正在載入遊戲狀態…</p>;
+    // No seat matches myGamePlayerId — either state genuinely hasn't arrived yet, or this
+    // connection is spectating (room:spectate never claims a player seat). Since spectators are
+    // real, expected traffic (not just a loading blip), render a read-only view instead of
+    // getting stuck on a spinner forever: `opponents` above already resolves to every player
+    // (nothing matches myGamePlayerId to exclude), and activePlayer/isMyTurn/nameOf/connectedOf/
+    // botLevelOf are all already computed above without depending on `me`.
+    const spectatorWinner = game.phase === 'GAME_OVER' ? game.winnerId : undefined;
+    const spectatorWinnerName = spectatorWinner ? nameOf(spectatorWinner) : '';
+    return (
+      <div className="game-board">
+        <EventToast events={recentEvents} nameOf={nameOf} />
+        <header className="game-header">
+          <div className="game-header__status">
+            <span className="badge badge--bot">👁️ 旁觀中</span>
+            <span className="badge">{PHASE_LABELS[game.phase]}</span>
+            <span>輪到 {activePlayer?.name ?? '?'}</span>
+            <span>牌組剩 {game.deckCount} 張</span>
+            <span>棄牌 {game.discardPile.length} 張</span>
+          </div>
+          <button type="button" className="btn btn--ghost btn--small" onClick={onLeave}>
+            離開
+          </button>
+        </header>
+
+        <MacroEventBanner events={game.activeMacroEvents} />
+
+        <div className="game-body">
+          {game.mode === 'REAL_BIG_DEAL' ? (
+            <section className="board-section">
+              <BoardMap game={game} myGamePlayerId={myGamePlayerId} />
+            </section>
+          ) : (
+            <section className="opponents-row">
+              {opponents.map((p) => (
+                <OpponentPanel
+                  key={p.id}
+                  player={p}
+                  isActive={p.id === activePlayer?.id}
+                  isConnected={connectedOf(p.id)}
+                  botLevel={botLevelOf(p.id)}
+                />
+              ))}
+            </section>
+          )}
+
+          <aside className="sidebar">
+            <EventLog events={recentEvents} nameOf={nameOf} />
+          </aside>
+        </div>
+
+        {(spectatorWinner || game.raidFailed) && (
+          <GameOverScreen
+            winnerName={spectatorWinnerName}
+            isMe={false}
+            mode={game.mode}
+            raidFailed={game.raidFailed ?? false}
+            onLeave={onLeave}
+          />
+        )}
+      </div>
+    );
   }
 
   const teammate =

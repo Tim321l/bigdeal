@@ -325,3 +325,76 @@ describe('bots', () => {
     },
   );
 });
+
+describe('spectate', () => {
+  it('adds a socket to the room without creating a seat, and reflects it in the spectator count', () => {
+    const manager = new RoomManager();
+    const { room } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+
+    const spectated = unwrap(manager.spectate(room.id, 'socket-watcher'));
+    expect(spectated.room.spectatorSocketIds.has('socket-watcher')).toBe(true);
+    expect(spectated.room.players).toHaveLength(1); // no seat was created
+
+    manager.unspectate(room.id, 'socket-watcher');
+    expect(manager.getRoom(room.id)?.spectatorSocketIds.has('socket-watcher')).toBe(false);
+  });
+
+  it('rejects spectating an unknown room', () => {
+    const manager = new RoomManager();
+    const result = manager.spectate('NOSUCH', 'socket-watcher');
+    expect(result).toEqual({ ok: false, error: 'Room not found.' });
+  });
+
+  it('works at any room status, including mid-game', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    unwrap(manager.joinRoom(room.id, 'Bob', 'socket-bob'));
+    const started = unwrap(manager.setReady(room.id, hostId, true));
+    unwrap(manager.setReady(room.id, started.room.players[1]!.lobbyId, true));
+
+    const spectated = unwrap(manager.spectate(room.id, 'socket-watcher'));
+    expect(spectated.room.status).toBe('IN_PROGRESS');
+    expect(spectated.room.spectatorSocketIds.has('socket-watcher')).toBe(true);
+  });
+});
+
+describe('match history', () => {
+  it('starts empty and rejects an unknown room', () => {
+    const manager = new RoomManager();
+    const { room } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    expect(unwrap(manager.getHistory(room.id)).history).toEqual([]);
+    expect(manager.getHistory('NOSUCH')).toEqual({ ok: false, error: 'Room not found.' });
+  });
+
+  it('records a result once a bot-driven game actually finishes', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Human', 'socket-human'));
+    unwrap(manager.addBot(room.id, hostId, 3));
+    const started = unwrap(manager.setReady(room.id, hostId, true));
+    expect(started.started).toBe(true);
+
+    const MAX_ITERATIONS = 500;
+    let iterations = 0;
+    let state = started.room.gameState!;
+    while (state.phase !== 'GAME_OVER' && iterations < MAX_ITERATIONS) {
+      iterations += 1;
+      if (manager.isBotTurn(room.id)) {
+        manager.processBotTurns(room.id);
+      } else if (state.phase === 'REACTION_WINDOW') {
+        unwrap(manager.submitIntent(room.id, hostId, { type: 'RESPOND', playerId: 'player-1', response: 'ACCEPT' }));
+      } else if (state.phase === 'TURN_START') {
+        unwrap(manager.submitIntent(room.id, hostId, { type: 'DRAW', playerId: 'player-1' }));
+      } else if (state.phase === 'ACTION') {
+        unwrap(manager.submitIntent(room.id, hostId, { type: 'END_TURN', playerId: 'player-1' }));
+      }
+      state = manager.getRoom(room.id)!.gameState!;
+    }
+    expect(state.phase).toBe('GAME_OVER');
+
+    const { history } = unwrap(manager.getHistory(room.id));
+    expect(history).toHaveLength(1);
+    expect(history[0]?.mode).toBe('CLASSIC');
+    expect(history[0]?.playerNames).toEqual(['Human', '機械人 1 (Lv.3)']);
+    expect(['Human', '機械人 1 (Lv.3)']).toContain(history[0]?.winnerName);
+  });
+});

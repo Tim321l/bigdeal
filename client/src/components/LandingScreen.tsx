@@ -3,14 +3,22 @@ import { useState } from 'react';
 interface LandingScreenProps {
   onCreate: (name: string) => void;
   onJoin: (roomId: string, name: string) => void;
+  onSpectate: (roomId: string) => void;
   error: string | null;
   onDismissError: () => void;
 }
 
-export function LandingScreen({ onCreate, onJoin, error, onDismissError }: LandingScreenProps) {
+/** A shared room link (?room=CODE) lands here straight into the join form with the code
+ * prefilled — the visitor still has to type their own name, but doesn't have to hunt for or
+ * retype the room code. */
+function roomCodeFromUrl(): string {
+  return new URLSearchParams(window.location.search).get('room')?.toUpperCase() ?? '';
+}
+
+export function LandingScreen({ onCreate, onJoin, onSpectate, error, onDismissError }: LandingScreenProps) {
   const [name, setName] = useState('');
-  const [roomCode, setRoomCode] = useState('');
-  const [mode, setMode] = useState<'create' | 'join'>('create');
+  const [roomCode, setRoomCode] = useState(roomCodeFromUrl);
+  const [mode, setMode] = useState<'create' | 'join'>(() => (roomCodeFromUrl() ? 'join' : 'create'));
 
   const canSubmit = name.trim().length > 0 && (mode === 'create' || roomCode.trim().length > 0);
 
@@ -73,6 +81,16 @@ export function LandingScreen({ onCreate, onJoin, error, onDismissError }: Landi
         <button type="button" className="btn btn--primary btn--block" disabled={!canSubmit} onClick={submit}>
           {mode === 'create' ? '開新房間' : '加入房間'}
         </button>
+        {mode === 'join' && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--block"
+            disabled={roomCode.trim().length === 0}
+            onClick={() => onSpectate(roomCode.trim().toUpperCase())}
+          >
+            👁️ 淨係旁觀(唔使打名)
+          </button>
+        )}
       </div>
     </div>
   );

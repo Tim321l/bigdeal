@@ -12,6 +12,7 @@ export default function App() {
     recentEvents,
     myLobbyId,
     myGamePlayerId,
+    isSpectating,
     createRoom,
     joinRoom,
     setReady,
@@ -19,6 +20,8 @@ export default function App() {
     sendIntent,
     addBot,
     removeBot,
+    spectateRoom,
+    getHistory,
     leaveSession,
     clearError,
   } = useGameConnection();
@@ -41,10 +44,13 @@ export default function App() {
         onSetMode={setMode}
         onAddBot={addBot}
         onRemoveBot={removeBot}
+        onFetchHistory={getHistory}
         onLeave={leaveSession}
       />
+    ) : isSpectating ? (
+      <p className="loading">👁️ 已加入旁觀,等緊遊戲開始…</p>
     ) : (
-      <LandingScreen onCreate={createRoom} onJoin={joinRoom} error={error} onDismissError={clearError} />
+      <LandingScreen onCreate={createRoom} onJoin={joinRoom} onSpectate={spectateRoom} error={error} onDismissError={clearError} />
     );
 
   return (

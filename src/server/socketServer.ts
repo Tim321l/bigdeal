@@ -40,6 +40,10 @@ interface SocketSession {
   lobbyId: string;
 }
 
+/** Never matches a real GameState player id (those are always `player-N`) — sanitizeStateFor
+ * hides every hand when nothing matches, which is exactly the view a spectator should get. */
+const SPECTATOR_VIEWER_ID = '__spectator__';
+
 export type GameSocketServer = Server<ClientToServerEvents, ServerToClientEvents>;
 
 export function createSocketServer(httpServer: HttpServer, roomManager: RoomManager = new RoomManager()): GameSocketServer {
@@ -49,6 +53,9 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
   });
 
   const sessions = new Map<string, SocketSession>();
+  /** Spectator sockets, keyed by socket id — separate from `sessions` since a spectator never
+   * holds a lobbyId (no seat, no reconnect concept). */
+  const spectatorSessions = new Map<string, string>(); // socketId -> roomId
 
   function broadcastRoomSummary(roomId: string): void {
     const room = roomManager.getRoom(roomId);
@@ -62,6 +69,12 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
     for (const player of room.players) {
       if (!player.connected || !player.socketId || !player.gamePlayerId) continue;
       io.to(player.socketId).emit('game:state', sanitizeStateFor(room.gameState, player.gamePlayerId));
+    }
+    if (room.spectatorSocketIds.size > 0) {
+      const spectatorView = sanitizeStateFor(room.gameState, SPECTATOR_VIEWER_ID);
+      for (const socketId of room.spectatorSocketIds) {
+        io.to(socketId).emit('game:state', spectatorView);
+      }
     }
   }
 
@@ -206,7 +219,36 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
       runBotsAndBroadcast(session.roomId, result.value.events);
     });
 
+    socket.on('room:spectate', ({ roomId }, ack) => {
+      const result = roomManager.spectate(roomId, socket.id);
+      if (!result.ok) {
+        ack({ ok: false, error: result.error });
+        return;
+      }
+      spectatorSessions.set(socket.id, roomId);
+      void socket.join(roomId);
+      ack({ ok: true, data: {} });
+      broadcastRoomSummary(roomId);
+      broadcastGameState(roomId);
+    });
+
+    socket.on('room:history', ({ roomId }, ack) => {
+      const result = roomManager.getHistory(roomId);
+      if (!result.ok) {
+        ack({ ok: false, error: result.error });
+        return;
+      }
+      ack({ ok: true, data: { history: result.value.history } });
+    });
+
     socket.on('disconnect', () => {
+      const spectatingRoomId = spectatorSessions.get(socket.id);
+      if (spectatingRoomId) {
+        spectatorSessions.delete(socket.id);
+        roomManager.unspectate(spectatingRoomId, socket.id);
+        broadcastRoomSummary(spectatingRoomId);
+      }
+
       const session = sessions.get(socket.id);
       if (!session) return;
       sessions.delete(socket.id);

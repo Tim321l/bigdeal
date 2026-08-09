@@ -18,6 +18,7 @@ export type {
   AckResult,
   ClientToServerEvents,
   JoinAckData,
+  MatchResult,
   PublicRoomPlayer,
   RoomSummary,
   ServerToClientEvents,

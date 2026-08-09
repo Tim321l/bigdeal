@@ -28,6 +28,19 @@ export interface Room {
   players: RoomPlayer[];
   gameState?: GameState | undefined;
   createdAt: number;
+  /** Sockets watching without a seat — keyed by socket id, not a stable lobby identity, since a
+   * spectator has no reconnect concept: refreshing just rejoins as a spectator again. */
+  spectatorSocketIds: Set<string>;
+  /** Capped ring buffer of finished games this room has played, most recent last — resets on
+   * server restart (no database backing this, matching the no-deployment scope). */
+  history: MatchResult[];
+}
+
+export interface MatchResult {
+  mode: GameMode;
+  winnerName: string;
+  playerNames: string[];
+  endedAt: number;
 }
 
 export interface PublicRoomPlayer {
@@ -45,6 +58,8 @@ export interface RoomSummary {
   mode: GameMode;
   hostLobbyId: string;
   players: PublicRoomPlayer[];
+  /** Count only — spectators aren't named/listed individually, keeping the feature minimal. */
+  spectatorCount: number;
 }
 
 export function toRoomSummary(room: Room): RoomSummary {
@@ -61,6 +76,7 @@ export function toRoomSummary(room: Room): RoomSummary {
       gamePlayerId: player.gamePlayerId,
       bot: player.bot,
     })),
+    spectatorCount: room.spectatorSocketIds.size,
   };
 }
 
@@ -84,6 +100,8 @@ export interface ClientToServerEvents {
   'room:addBot': (payload: { level: BotLevel }, ack: (result: AckResult<Record<string, never>>) => void) => void;
   'room:removeBot': (payload: { botLobbyId: string }, ack: (result: AckResult<Record<string, never>>) => void) => void;
   'game:intent': (payload: { action: ActionPayload }, ack: (result: AckResult<Record<string, never>>) => void) => void;
+  'room:spectate': (payload: { roomId: string }, ack: (result: AckResult<Record<string, never>>) => void) => void;
+  'room:history': (payload: { roomId: string }, ack: (result: AckResult<{ history: MatchResult[] }>) => void) => void;
 }
 
 export interface ServerToClientEvents {

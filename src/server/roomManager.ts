@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { type BotLevel, decideBotAction } from '../engine/bot';
 import { applyAction, initGame } from '../engine/stateManager';
 import type { ActionPayload, GameEvent, GameMode, GameState } from '../types/game';
-import type { Room, RoomPlayer } from './types';
+import type { MatchResult, Room, RoomPlayer } from './types';
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 5;
@@ -12,6 +12,8 @@ const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_CODE_LENGTH = 6;
 /** Safety valve against a pathological bot-only loop never yielding to a human. */
 const MAX_BOT_STEPS = 500;
+/** Ring-buffer cap for in-memory match history — oldest entries drop first. */
+const MAX_HISTORY = 50;
 
 export type RoomResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -44,6 +46,8 @@ export class RoomManager {
       hostLobbyId: player.lobbyId,
       players: [player],
       createdAt: Date.now(),
+      spectatorSocketIds: new Set(),
+      history: [],
     };
     this.rooms.set(room.id, room);
     return ok({ room, lobbyId: player.lobbyId, reconnectToken: player.reconnectToken });
@@ -140,8 +144,29 @@ export class RoomManager {
     room.gameState = nextState;
     if (nextState.phase === 'GAME_OVER') {
       room.status = 'FINISHED';
+      this.recordHistory(room, nextState);
     }
     return ok({ room, events });
+  }
+
+  /** Watch a room's broadcasts without occupying a seat — no ready-check participation, no
+   * reconnect concept (a spectator who drops just rejoins fresh). Works at any room status so a
+   * shared link can be opened either before or after the game starts. */
+  spectate(roomId: string, socketId: string): RoomResult<{ room: Room }> {
+    const room = this.rooms.get(roomId);
+    if (!room) return err('Room not found.');
+    room.spectatorSocketIds.add(socketId);
+    return ok({ room });
+  }
+
+  unspectate(roomId: string, socketId: string): void {
+    this.rooms.get(roomId)?.spectatorSocketIds.delete(socketId);
+  }
+
+  getHistory(roomId: string): RoomResult<{ history: MatchResult[] }> {
+    const room = this.rooms.get(roomId);
+    if (!room) return err('Room not found.');
+    return ok({ history: room.history });
   }
 
   setMode(roomId: string, hostLobbyId: string, mode: GameMode): RoomResult<{ room: Room }> {
@@ -209,10 +234,27 @@ export class RoomManager {
       allEvents.push(...events);
       if (nextState.phase === 'GAME_OVER') {
         room.status = 'FINISHED';
+        this.recordHistory(room, nextState);
         break;
       }
     }
     return allEvents;
+  }
+
+  /** Called exactly once per game, right where status first flips to FINISHED in both
+   * submitIntent and processBotTurns — the IN_PROGRESS-only guards at the top of each mean
+   * neither can reach this a second time for the same game. */
+  private recordHistory(room: Room, finalState: GameState): void {
+    const winnerName = finalState.raidFailed
+      ? '全軍覆沒'
+      : (room.players.find((p) => p.gamePlayerId === finalState.winnerId)?.name ?? '?');
+    room.history.push({
+      mode: room.mode,
+      winnerName,
+      playerNames: room.players.map((p) => p.name),
+      endedAt: Date.now(),
+    });
+    if (room.history.length > MAX_HISTORY) room.history.shift();
   }
 
   /**
