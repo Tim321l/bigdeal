@@ -1,6 +1,7 @@
 import { COMPLETE_SET_SIZE, PROPERTY_COLORS } from '../data/constants';
 import { CARDS } from '../data/cards';
 import { MACRO_EVENTS } from '../data/events';
+import { BOARD_SIZE, BOARD_TILES, GO_BONUS } from '../data/board';
 import type {
   ActionPayload,
   Card,
@@ -17,6 +18,7 @@ import type {
 import { calculateEffectiveRent, getEffectiveActionLimit, getEffectiveDrawCount } from './modifierPipeline';
 import { PRNG } from './prng';
 import { checkWinner } from './winCondition';
+import { tileCard, tileOwner } from './board';
 
 const STARTING_HAND_SIZE = 5;
 export const BASE_ACTION_LIMIT = 3;
@@ -44,7 +46,10 @@ function emptyField(): Record<PropertyColor, Card[]> {
 
 export function initGame(playerNames: string[], seed: number, mode: GameMode = 'CLASSIC'): GameState {
   const rng = new PRNG(seed);
-  const deck = rng.shuffle(CARDS);
+  // REAL_BIG_DEAL: PROPERTY cards live on the board (see src/data/board.ts), not in the deck —
+  // they're acquired by landing on their tile, never by drawing.
+  const deckSource = mode === 'REAL_BIG_DEAL' ? CARDS.filter((c) => c.type !== 'PROPERTY') : CARDS;
+  const deck = rng.shuffle(deckSource);
 
   const players: Player[] = playerNames.map((name, index) => ({
     id: `player-${index + 1}`,
@@ -55,6 +60,7 @@ export function initGame(playerNames: string[], seed: number, mode: GameMode = '
     // Seat parity gives fixed 2-person teams (seats 1&3 vs 2&4) without needing explicit
     // team-selection UI — mirrors sitting across from your partner at a real table.
     ...(mode === 'SYNDICATE' ? { teamId: index % 2 } : {}),
+    ...(mode === 'REAL_BIG_DEAL' ? { position: 0 } : {}),
   }));
 
   for (const player of players) {
@@ -77,7 +83,7 @@ export function initGame(playerNames: string[], seed: number, mode: GameMode = '
     discardPile: [],
     activeMacroEvents: [],
     rngSeed: rng.getState(),
-    phase: mode === 'AUCTION_DRAFT' ? 'AUCTION' : 'TURN_START',
+    phase: mode === 'AUCTION_DRAFT' ? 'AUCTION' : mode === 'REAL_BIG_DEAL' ? 'ROLL' : 'TURN_START',
     actionsPlayedThisTurn: 0,
     ...(mode === 'AUCTION_DRAFT' ? { pendingAuction: { cards: openingAuctionCards, bids: {} } } : {}),
     ...(mode === 'BOSS_RAID' ? { turnLimit: BOSS_RAID_TURN_LIMIT } : {}),
@@ -106,6 +112,24 @@ export function applyAction(state: GameState, action: ActionPayload): { nextStat
       break;
     case 'SUBMIT_BID':
       handleSubmitBid(nextState, action, events);
+      break;
+    case 'ROLL_DICE':
+      handleRollDice(nextState, action, events);
+      break;
+    case 'BUY_TILE':
+      handleBuyTile(nextState, action, events);
+      break;
+    case 'DECLINE_TILE':
+      handleDeclineTile(nextState, action, events);
+      break;
+    case 'TELEPORT_TRANSIT':
+      handleTeleportTransit(nextState, action, events);
+      break;
+    case 'COLLECT_TRANSIT_RENT':
+      handleCollectTransitRent(nextState, action, events);
+      break;
+    case 'SKIP_TILE_DECISION':
+      handleSkipTileDecision(nextState, action, events);
       break;
   }
 
@@ -195,6 +219,18 @@ function autoPickPayment(available: Card[], amount: number): Card[] {
   return picked;
 }
 
+/** Tiered rent (by same-color property count) plus any House/Hotel flat bonus for one color's
+ * field slice — shared by hand-played RENT cards and REAL_BIG_DEAL's landing-triggered board rent. */
+function computeSetRent(propertySet: Card[]): number {
+  const propertyCards = propertySet.filter((c) => c.type === 'PROPERTY');
+  const tiers = propertyCards[0]?.rentTiers;
+  const tierRent = tiers?.[Math.min(propertyCards.length, tiers.length) - 1] ?? 0;
+  const improvementBonus =
+    (propertySet.some((c) => c.actionType === 'HOUSE') ? HOUSE_RENT_BONUS : 0) +
+    (propertySet.some((c) => c.actionType === 'HOTEL') ? HOTEL_RENT_BONUS : 0);
+  return tierRent + improvementBonus;
+}
+
 /** BATTLE_ROYALE doubles every rent/money-demand amount — applied once, at the point each such
  * amount is computed (playRentCard, DEBT_COLLECTOR, BIRTHDAY), never inside chargePlayer itself
  * (which also handles 炒家摸頂's already-resolved amount and must not double it a second time). */
@@ -226,9 +262,10 @@ function chargePlayer(
   const available = [...payer.bank, ...payer.hand];
   const totalAvailable = available.reduce((sum, card) => sum + card.value, 0);
 
-  if (state.mode === 'BATTLE_ROYALE' && totalAvailable < amount) {
+  if ((state.mode === 'BATTLE_ROYALE' || state.mode === 'REAL_BIG_DEAL') && totalAvailable < amount) {
     // Bankrupt: can't cover the charge even handing over everything. Bank, hand, and field all
-    // transfer to the collector, and the payer is out of the game for good.
+    // transfer to the collector (including every board tile the payer owned), and the payer is
+    // out of the game for good.
     receiver.bank.push(...payer.bank, ...payer.hand);
     payer.bank = [];
     payer.hand = [];
@@ -312,6 +349,8 @@ function endTurn(state: GameState, events: GameEvent[]): void {
 
   if (state.mode === 'AUCTION_DRAFT') {
     startAuction(state, events);
+  } else if (state.mode === 'REAL_BIG_DEAL') {
+    state.phase = 'ROLL';
   } else {
     state.phase = 'TURN_START';
   }
@@ -332,12 +371,14 @@ function expireMacroEvents(state: GameState, events: GameEvent[]): void {
   state.activeMacroEvents = remaining;
 }
 
-/** Returns true if the drawn special effects require skipping straight to TURN_END (八號風球). */
-function maybeTriggerMacroEvent(state: GameState, events: GameEvent[]): boolean {
+/** Returns true if the drawn special effects require skipping straight to TURN_END (八號風球).
+ * `forceTrigger` bypasses the 30% roll entirely — used by REAL_BIG_DEAL's STORM tile, which
+ * guarantees a fresh disaster on landing, same idea as BOSS_RAID's guaranteed-every-turn rule. */
+function maybeTriggerMacroEvent(state: GameState, events: GameEvent[], forceTrigger = false): boolean {
   // BOSS_RAID: the boss guarantees a fresh disaster every turn instead of the usual 30% roll —
   // no PRNG consumed for the roll itself, just for which event gets picked below.
   let shouldTrigger: boolean;
-  if (state.mode === 'BOSS_RAID') {
+  if (state.mode === 'BOSS_RAID' || forceTrigger) {
     shouldTrigger = true;
   } else {
     const roll = new PRNG(state.rngSeed);
@@ -619,6 +660,262 @@ function resolveAuction(state: GameState, events: GameEvent[]): void {
   state.phase = 'ACTION';
 }
 
+// --- ROLL / TILE_DECISION (REAL_BIG_DEAL only) ---------------------------
+
+function handleRollDice(
+  state: GameState,
+  action: Extract<ActionPayload, { type: 'ROLL_DICE' }>,
+  events: GameEvent[],
+): void {
+  const activePlayer = state.players[state.activePlayerIndex];
+  if (!activePlayer || action.playerId !== activePlayer.id) {
+    invalid(events, 'Only the active player may roll.');
+    return;
+  }
+  if (state.phase !== 'ROLL') {
+    invalid(events, 'The die can only be rolled at the start of a turn.');
+    return;
+  }
+
+  const rng = new PRNG(state.rngSeed);
+  const roll = rng.nextInt(1, 6);
+  state.rngSeed = rng.getState();
+
+  const from = activePlayer.position ?? 0;
+  const passedGo = from + roll >= BOARD_SIZE;
+  const to = (from + roll) % BOARD_SIZE;
+  activePlayer.position = to;
+  events.push({ type: 'DICE_ROLLED', playerId: activePlayer.id, roll, fromPosition: from, toPosition: to });
+
+  if (passedGo) {
+    grantMoney(state, activePlayer, GO_BONUS, events);
+    events.push({ type: 'PASSED_GO', playerId: activePlayer.id, amount: GO_BONUS });
+  }
+
+  resolveLanding(state, activePlayer, events);
+}
+
+/** Dispatches on the tile the player just landed on. Property tiles either open a TILE_DECISION
+ * (unowned — buy or decline) or a REACTION_WINDOW (owned by someone else — board rent, defendable
+ * with 封區 exactly like a played RENT card); landing on your own tile is a no-op. */
+function resolveLanding(state: GameState, player: Player, events: GameEvent[]): void {
+  const tile = BOARD_TILES[player.position ?? 0];
+  if (!tile) {
+    state.phase = 'TURN_START';
+    return;
+  }
+
+  if (tile.kind === 'GO' || tile.kind === 'FREE') {
+    state.phase = 'TURN_START';
+    return;
+  }
+
+  if (tile.kind === 'AUCTION') {
+    startAuction(state, events);
+    return;
+  }
+
+  if (tile.kind === 'STORM') {
+    maybeTriggerMacroEvent(state, events, true);
+    state.phase = 'TURN_START';
+    return;
+  }
+
+  const card = tileCard(tile.position);
+  const color = card?.color;
+  if (!card || !color) {
+    state.phase = 'TURN_START';
+    return;
+  }
+
+  const owner = tileOwner(state, tile.position);
+  if (!owner) {
+    state.pendingTileDecision = { playerId: player.id, tileIndex: tile.position, kind: 'BUY_PROPERTY', price: card.value };
+    state.phase = 'TILE_DECISION';
+    return;
+  }
+
+  if (owner.id === player.id) {
+    // Landing on your own tile is otherwise a no-op, except transit tiles still offer their
+    // teleport/collect-rent perk even when you already own the one you're standing on.
+    if (color === 'TRANSPORT') {
+      state.pendingTileDecision = { playerId: player.id, tileIndex: tile.position, kind: 'TRANSIT' };
+      state.phase = 'TILE_DECISION';
+    } else {
+      state.phase = 'TURN_START';
+    }
+    return;
+  }
+
+  // Owned by another player — board rent. Simplification: the transit teleport/collect-rent perk
+  // is only offered when landing doesn't cost you rent (unowned or self-owned) — paying rent on
+  // someone else's transit hub doesn't also grant you a free ride.
+  const amount = computeSetRent(owner.field[color]);
+  const boardRentCard: Card = {
+    id: `board-rent-${state.turn}-${tile.position}`,
+    name: `${card.name} 過路費`,
+    type: 'RENT',
+    value: 0,
+    color,
+  };
+  openReactionWindow(
+    state,
+    { card: boardRentCard, sourcePlayerId: owner.id, targetQueue: [player.id], amount, returnPhase: 'TURN_START' },
+    events,
+  );
+}
+
+/** After a TILE_DECISION resolves (bought, declined, or a transit choice made), transit tiles get
+ * one more chance to offer their teleport/collect-rent perk before finally moving on to the draw
+ * step — everything else goes straight to TURN_START. */
+function afterTileDecision(state: GameState, player: Player, resolvedTileIndex: number, alreadyOfferedTransit: boolean): void {
+  const card = tileCard(resolvedTileIndex);
+  if (!alreadyOfferedTransit && card?.color === 'TRANSPORT') {
+    state.pendingTileDecision = { playerId: player.id, tileIndex: resolvedTileIndex, kind: 'TRANSIT' };
+    state.phase = 'TILE_DECISION';
+    return;
+  }
+  state.pendingTileDecision = undefined;
+  state.phase = 'TURN_START';
+}
+
+function handleBuyTile(
+  state: GameState,
+  action: Extract<ActionPayload, { type: 'BUY_TILE' }>,
+  events: GameEvent[],
+): void {
+  const activePlayer = state.players[state.activePlayerIndex];
+  const pending = state.pendingTileDecision;
+  if (!activePlayer || action.playerId !== activePlayer.id) {
+    invalid(events, 'Only the active player may buy this tile.');
+    return;
+  }
+  if (state.phase !== 'TILE_DECISION' || !pending || pending.kind !== 'BUY_PROPERTY') {
+    invalid(events, 'No property purchase is currently pending.');
+    return;
+  }
+  const card = tileCard(pending.tileIndex);
+  const price = pending.price ?? 0;
+  if (!card || !card.color) {
+    invalid(events, 'That tile has no property to buy.');
+    return;
+  }
+  const bankTotal = activePlayer.bank.reduce((sum, c) => sum + c.value, 0);
+  if (bankTotal < price) {
+    invalid(events, 'Not enough cash in the bank to buy this tile.');
+    return;
+  }
+
+  const payable = autoPickPayment(activePlayer.bank, price);
+  const paidIds = new Set(payable.map((c) => c.id));
+  activePlayer.bank = activePlayer.bank.filter((c) => !paidIds.has(c.id));
+  state.discardPile.push(...payable);
+  activePlayer.field[card.color].push(card);
+  events.push({ type: 'TILE_PURCHASED', playerId: activePlayer.id, tileIndex: pending.tileIndex, price });
+
+  afterTileDecision(state, activePlayer, pending.tileIndex, false);
+  checkAndRecordWinner(state, events);
+}
+
+function handleDeclineTile(
+  state: GameState,
+  action: Extract<ActionPayload, { type: 'DECLINE_TILE' }>,
+  events: GameEvent[],
+): void {
+  const activePlayer = state.players[state.activePlayerIndex];
+  const pending = state.pendingTileDecision;
+  if (!activePlayer || action.playerId !== activePlayer.id) {
+    invalid(events, 'Only the active player may decline this tile.');
+    return;
+  }
+  if (state.phase !== 'TILE_DECISION' || !pending || pending.kind !== 'BUY_PROPERTY') {
+    invalid(events, 'No property purchase is currently pending.');
+    return;
+  }
+
+  events.push({ type: 'TILE_DECLINED', playerId: activePlayer.id, tileIndex: pending.tileIndex });
+  afterTileDecision(state, activePlayer, pending.tileIndex, false);
+}
+
+function handleTeleportTransit(
+  state: GameState,
+  action: Extract<ActionPayload, { type: 'TELEPORT_TRANSIT' }>,
+  events: GameEvent[],
+): void {
+  const activePlayer = state.players[state.activePlayerIndex];
+  const pending = state.pendingTileDecision;
+  if (!activePlayer || action.playerId !== activePlayer.id) {
+    invalid(events, 'Only the active player may teleport.');
+    return;
+  }
+  if (state.phase !== 'TILE_DECISION' || !pending || pending.kind !== 'TRANSIT') {
+    invalid(events, 'No transit decision is currently pending.');
+    return;
+  }
+  const destinationTile = BOARD_TILES[action.toPosition];
+  const destinationCard = destinationTile ? tileCard(destinationTile.position) : undefined;
+  if (!destinationTile || destinationCard?.color !== 'TRANSPORT' || destinationTile.position === activePlayer.position) {
+    invalid(events, 'You must teleport to a different transit tile.');
+    return;
+  }
+
+  activePlayer.position = destinationTile.position;
+  events.push({ type: 'TRANSIT_TELEPORTED', playerId: activePlayer.id, toPosition: destinationTile.position });
+  // Stays in TILE_DECISION — the player may still collect transit rent or skip to finish up.
+}
+
+function handleCollectTransitRent(
+  state: GameState,
+  action: Extract<ActionPayload, { type: 'COLLECT_TRANSIT_RENT' }>,
+  events: GameEvent[],
+): void {
+  const activePlayer = state.players[state.activePlayerIndex];
+  const pending = state.pendingTileDecision;
+  if (!activePlayer || action.playerId !== activePlayer.id) {
+    invalid(events, 'Only the active player may collect transit rent.');
+    return;
+  }
+  if (state.phase !== 'TILE_DECISION' || !pending || pending.kind !== 'TRANSIT') {
+    invalid(events, 'No transit decision is currently pending.');
+    return;
+  }
+  const transitSet = activePlayer.field.TRANSPORT;
+  if (!transitSet.some((c) => c.type === 'PROPERTY')) {
+    invalid(events, 'You do not own any transit tiles to collect rent for.');
+    return;
+  }
+
+  const amount = computeSetRent(transitSet);
+  for (const opponent of state.players) {
+    if (!isOpposingPlayer(state, activePlayer, opponent)) continue;
+    chargePlayer(state, opponent, activePlayer, amount, undefined, events);
+  }
+
+  state.pendingTileDecision = undefined;
+  state.phase = 'TURN_START';
+  checkAndRecordWinner(state, events);
+}
+
+function handleSkipTileDecision(
+  state: GameState,
+  action: Extract<ActionPayload, { type: 'SKIP_TILE_DECISION' }>,
+  events: GameEvent[],
+): void {
+  const activePlayer = state.players[state.activePlayerIndex];
+  const pending = state.pendingTileDecision;
+  if (!activePlayer || action.playerId !== activePlayer.id) {
+    invalid(events, 'Only the active player may skip this decision.');
+    return;
+  }
+  if (state.phase !== 'TILE_DECISION' || !pending || pending.kind !== 'TRANSIT') {
+    invalid(events, 'No transit decision is currently pending.');
+    return;
+  }
+
+  state.pendingTileDecision = undefined;
+  state.phase = 'TURN_START';
+}
+
 function playProperty(state: GameState, player: Player, card: Card, events: GameEvent[]): void {
   const color = card.color;
   if (!color) {
@@ -684,12 +981,7 @@ function playRentCard(
   // top of the tiered property rent — they don't count as property cards for the tier lookup.
   // Owning more cards of a color than rentTiers has entries for (colors now print more than
   // COMPLETE_SET_SIZE copies) just reuses the top tier rather than reading past the array.
-  const tiers = propertyCards[0]?.rentTiers;
-  const tierRent = tiers?.[Math.min(propertyCards.length, tiers.length) - 1] ?? 0;
-  const improvementBonus =
-    (propertySet.some((c) => c.actionType === 'HOUSE') ? HOUSE_RENT_BONUS : 0) +
-    (propertySet.some((c) => c.actionType === 'HOTEL') ? HOTEL_RENT_BONUS : 0);
-  const baseRent = tierRent + improvementBonus;
+  const baseRent = computeSetRent(propertySet);
   // 孖展炒樓 (DOUBLE_RENT) boosts the printed rent before macro-event modifiers apply on top,
   // e.g. $3M base * DOUBLE_RENT * 突發加息 (x0.5) = $3M, not $2M.
   const boostedBaseRent = baseRent * (state.pendingRentMultiplier ?? 1);
@@ -1152,8 +1444,8 @@ function handleRespond(
     pending.targetQueue = pending.targetQueue.slice(1);
     pending.cancelled = false;
     if (pending.targetQueue.length === 0) {
+      state.phase = pending.returnPhase ?? 'ACTION';
       state.pendingReaction = undefined;
-      state.phase = 'ACTION';
     } else {
       const nextTarget = pending.targetQueue[0];
       if (nextTarget) {
@@ -1174,8 +1466,8 @@ function handleRespond(
   pending.targetQueue = pending.targetQueue.slice(1);
   pending.cancelled = false;
   if (pending.targetQueue.length === 0) {
+    state.phase = pending.returnPhase ?? 'ACTION';
     state.pendingReaction = undefined;
-    state.phase = 'ACTION';
   } else {
     const nextTarget = pending.targetQueue[0];
     if (nextTarget) {

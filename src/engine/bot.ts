@@ -171,6 +171,10 @@ export function decideBotAction(state: GameState, botPlayerId: string, level: Bo
     return { type: 'DRAW', playerId: botPlayerId };
   }
 
+  if (state.phase === 'ROLL') {
+    return { type: 'ROLL_DICE', playerId: botPlayerId };
+  }
+
   if (state.phase === 'REACTION_WINDOW' && state.pendingReaction?.currentResponderId === botPlayerId) {
     return decideReaction(state, bot, level);
   }
@@ -183,7 +187,35 @@ export function decideBotAction(state: GameState, botPlayerId: string, level: Bo
     return decideBid(state, bot, level);
   }
 
+  if (state.phase === 'TILE_DECISION' && state.pendingTileDecision?.playerId === botPlayerId) {
+    return decideTileDecision(state, bot);
+  }
+
   return { type: 'END_TURN', playerId: botPlayerId };
+}
+
+/** REAL_BIG_DEAL: buy an unowned tile if it won't leave the bank below a small safety reserve
+ * (so the bot isn't immediately unable to pay the next rent/debt it owes); for a transit tile,
+ * always collect free rent if eligible, never bother teleporting (keeps behavior predictable). */
+function decideTileDecision(state: GameState, bot: Player): ActionPayload {
+  const pending = state.pendingTileDecision;
+  if (!pending) return { type: 'SKIP_TILE_DECISION', playerId: bot.id };
+
+  if (pending.kind === 'BUY_PROPERTY') {
+    const price = pending.price ?? 0;
+    const bankTotal = bot.bank.reduce((sum, c) => sum + c.value, 0);
+    const reserve = 2;
+    if (bankTotal - price >= reserve) {
+      return { type: 'BUY_TILE', playerId: bot.id };
+    }
+    return { type: 'DECLINE_TILE', playerId: bot.id };
+  }
+
+  const ownsTransit = bot.field.TRANSPORT.some((c) => c.type === 'PROPERTY');
+  if (ownsTransit) {
+    return { type: 'COLLECT_TRANSIT_RENT', playerId: bot.id };
+  }
+  return { type: 'SKIP_TILE_DECISION', playerId: bot.id };
 }
 
 /** AUCTION_DRAFT: bid a level-scaled fraction of the bot's bank cash — deterministic, no card

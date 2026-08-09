@@ -52,12 +52,14 @@ export interface Player {
   hand: Card[];
   field: Record<PropertyColor, Card[]>;
   bank: Card[];
-  /** BATTLE_ROYALE only: set once a charge they can't cover strips them of everything. Turn
-   * rotation skips eliminated players; CLASSIC mode never sets this. */
+  /** BATTLE_ROYALE/REAL_BIG_DEAL only: set once a charge they can't cover strips them of
+   * everything. Turn rotation skips eliminated players; CLASSIC mode never sets this. */
   eliminated?: boolean;
   /** SYNDICATE only: 0 or 1, assigned by seat parity at initGame. Teammates can't be targeted by
    * aggressive cards and their complete-set counts pool together for the win condition. */
   teamId?: number;
+  /** REAL_BIG_DEAL only: index into BOARD_TILES (src/data/board.ts), starts at 0 (GO). */
+  position?: number;
 }
 
 /** CLASSIC: first to 3 complete sets wins. BATTLE_ROYALE: rent/money-demand amounts are doubled
@@ -70,14 +72,32 @@ export interface Player {
  * BOSS_RAID: everyone co-operates against the deck itself — a macro event is GUARANTEED every
  * turn (not the usual 30% roll), and the whole table shares one win condition (combined bank
  * >= $30M or combined complete sets >= 4, pooled across every player). Fail to hit it within
- * turnLimit turns and everyone loses together. */
-export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE' | 'SYNDICATE' | 'AUCTION_DRAFT' | 'BOSS_RAID';
+ * turnLimit turns and everyone loses together. REAL_BIG_DEAL: a classic Monopoly-style board
+ * (see src/data/board.ts) layered on top of the card game — each turn opens by rolling a die and
+ * moving around a 32-tile loop; landing on an unowned property lets you buy it outright with
+ * cash, landing on an opponent's charges board rent (defendable with 封區/JUST_SAY_NO exactly
+ * like a played RENT card), landing on a transit tile offers a teleport and/or a free rent
+ * collection, landing on the auction/storm tiles reuses the existing blind-auction/macro-event
+ * systems. All existing hand-card play (RENT, HOUSE/HOTEL, steals, etc.) still works normally
+ * once the roll/landing resolves. Wins on 3 complete sets or by bankrupting every other player. */
+export type GameMode = 'CLASSIC' | 'BATTLE_ROYALE' | 'SYNDICATE' | 'AUCTION_DRAFT' | 'BOSS_RAID' | 'REAL_BIG_DEAL';
 
 /** AUCTION_DRAFT: the lot currently up for bid, and who has bid so far — amounts stay server-side
  * only until resolution (it's a BLIND auction), never appearing in SanitizedGameState. */
 export interface PendingAuction {
   cards: Card[];
   bids: Record<string, number>;
+}
+
+/** REAL_BIG_DEAL only: a decision the landing player needs to make before the turn can continue
+ * past TILE_DECISION — buy-or-decline an unowned property, or (for a TRANSPORT tile) optionally
+ * teleport and/or collect a free rent round. */
+export interface PendingTileDecision {
+  playerId: string;
+  tileIndex: number;
+  kind: 'BUY_PROPERTY' | 'TRANSIT';
+  /** BUY_PROPERTY only — the cash cost to buy the tile's property outright. */
+  price?: number;
 }
 
 export type ModifierTarget = 'RENT' | 'ACTION_LIMIT' | 'DRAW_COUNT';
@@ -106,7 +126,18 @@ export interface MacroEvent {
   specialEffects?: SpecialEffect[];
 }
 
-export type TurnPhase = 'TURN_START' | 'ACTION' | 'REACTION_WINDOW' | 'TURN_END' | 'GAME_OVER' | 'AUCTION';
+export type TurnPhase =
+  | 'TURN_START'
+  | 'ACTION'
+  | 'REACTION_WINDOW'
+  | 'TURN_END'
+  | 'GAME_OVER'
+  | 'AUCTION'
+  /** REAL_BIG_DEAL only: precedes TURN_START each turn — roll the die and resolve movement. */
+  | 'ROLL'
+  /** REAL_BIG_DEAL only: a PendingTileDecision is awaiting BUY_TILE/DECLINE_TILE or
+   * TELEPORT_TRANSIT/COLLECT_TRANSIT_RENT/SKIP_TILE_DECISION. */
+  | 'TILE_DECISION';
 
 export interface PlayCardTarget {
   playerId: string;
@@ -132,6 +163,10 @@ export interface PendingReaction {
   currentResponderId: string;
   /** Whether the effect is currently cancelled for targetQueue[0] (flips with each 封區 played). */
   cancelled: boolean;
+  /** Phase to return to once resolved — defaults to 'ACTION' when absent (every card-played rent
+   * today). REAL_BIG_DEAL board rent sets this to 'TURN_START' since landing-on-a-tile happens
+   * before the draw step, not during the ACTION phase. */
+  returnPhase?: TurnPhase;
 }
 
 export interface GameState {
@@ -156,6 +191,8 @@ export interface GameState {
   /** BOSS_RAID only — set instead of winnerId when turnLimit expires without the co-op win
    * condition met: everyone loses together, so there's no single winnerId to report. */
   raidFailed?: boolean | undefined;
+  /** REAL_BIG_DEAL only — a buy/decline or transit decision awaiting the landing player. */
+  pendingTileDecision?: PendingTileDecision | undefined;
   winnerId?: string;
 }
 
@@ -173,7 +210,13 @@ export type ActionPayload =
     }
   | { type: 'END_TURN'; playerId: string }
   | { type: 'GIFT_CARD'; playerId: string; cardId: string; toPlayerId: string }
-  | { type: 'SUBMIT_BID'; playerId: string; amount: number };
+  | { type: 'SUBMIT_BID'; playerId: string; amount: number }
+  | { type: 'ROLL_DICE'; playerId: string }
+  | { type: 'BUY_TILE'; playerId: string }
+  | { type: 'DECLINE_TILE'; playerId: string }
+  | { type: 'TELEPORT_TRANSIT'; playerId: string; toPosition: number }
+  | { type: 'COLLECT_TRANSIT_RENT'; playerId: string }
+  | { type: 'SKIP_TILE_DECISION'; playerId: string };
 
 export type GameEvent =
   | { type: 'CARDS_DRAWN'; playerId: string; count: number }
@@ -205,6 +248,11 @@ export type GameEvent =
   | { type: 'BID_SUBMITTED'; playerId: string }
   | { type: 'AUCTION_RESOLVED'; winnerId: string; winningBid: number; bids: Record<string, number> }
   | { type: 'RAID_FAILED' }
+  | { type: 'DICE_ROLLED'; playerId: string; roll: number; fromPosition: number; toPosition: number }
+  | { type: 'PASSED_GO'; playerId: string; amount: number }
+  | { type: 'TILE_PURCHASED'; playerId: string; tileIndex: number; price: number }
+  | { type: 'TILE_DECLINED'; playerId: string; tileIndex: number }
+  | { type: 'TRANSIT_TELEPORTED'; playerId: string; toPosition: number }
   | { type: 'TURN_ENDED'; playerId: string }
   | { type: 'GAME_WON'; playerId: string }
   | { type: 'INVALID_ACTION'; reason: string };

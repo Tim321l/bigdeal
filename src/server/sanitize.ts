@@ -4,6 +4,7 @@ import type {
   GameState,
   MacroEvent,
   PendingReaction,
+  PendingTileDecision,
   Player,
   PropertyColor,
   TurnPhase,
@@ -19,6 +20,8 @@ export interface SanitizedPlayer {
   bank: Card[];
   eliminated?: boolean;
   teamId?: number;
+  /** REAL_BIG_DEAL only — public info, index into BOARD_TILES. */
+  position?: number;
 }
 
 /** AUCTION_DRAFT: the lot is public, but it's a BLIND auction — bid amounts stay server-side
@@ -46,6 +49,9 @@ export interface SanitizedGameState {
   turnLimit?: number;
   /** BOSS_RAID only — set instead of winnerId when the turn limit expires without a win. */
   raidFailed?: boolean;
+  /** REAL_BIG_DEAL only — a buy/decline or transit decision awaiting the landing player. Public
+   * (no hidden fields to strip, unlike the blind auction). */
+  pendingTileDecision?: PendingTileDecision;
   winnerId?: string;
   /** Which player's perspective this view was built for. */
   viewerPlayerId: string;
@@ -62,6 +68,7 @@ function sanitizePlayer(player: Player, viewerPlayerId: string): SanitizedPlayer
     bank: player.bank,
     ...(player.eliminated ? { eliminated: true } : {}),
     ...(player.teamId !== undefined ? { teamId: player.teamId } : {}),
+    ...(player.position !== undefined ? { position: player.position } : {}),
   };
 }
 
@@ -88,6 +95,7 @@ export function sanitizeStateFor(state: GameState, viewerPlayerId: string): Sani
       : {}),
     ...(state.turnLimit !== undefined ? { turnLimit: state.turnLimit } : {}),
     ...(state.raidFailed !== undefined ? { raidFailed: state.raidFailed } : {}),
+    ...(state.pendingTileDecision ? { pendingTileDecision: state.pendingTileDecision } : {}),
     ...(state.winnerId ? { winnerId: state.winnerId } : {}),
     viewerPlayerId,
   };

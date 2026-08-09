@@ -63,5 +63,12 @@ export function checkWinner(state: GameState): string | undefined {
     }
     return undefined;
   }
+  if (state.mode === 'REAL_BIG_DEAL') {
+    // Same as BATTLE_ROYALE's last-survivor check, plus the classic 3-complete-sets win — whichever
+    // is reached first.
+    const survivors = state.players.filter((player) => !player.eliminated);
+    if (survivors.length === 1) return survivors[0]?.id;
+    return state.players.find((player) => hasWon(player))?.id;
+  }
   return state.players.find((player) => hasWon(player))?.id;
 }
