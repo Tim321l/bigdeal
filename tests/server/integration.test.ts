@@ -9,11 +9,13 @@ type ClientSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 let server: RunningServer;
 let baseUrl: string;
+const DASHBOARD_PASSWORD = 'test-dashboard-password';
 
 beforeAll(async () => {
   // Real play paces each bot action for legibility (see socketServer.ts) — tests want the
-  // fastest bot-vs-human game they can get instead.
-  server = await startServer(0, { botStepDelayMs: 0 });
+  // fastest bot-vs-human game they can get instead. A fixed dashboard password avoids every test
+  // run needing to read a freshly-generated one back off the server.
+  server = await startServer(0, { socket: { botStepDelayMs: 0 }, dashboardPassword: DASHBOARD_PASSWORD });
   baseUrl = `http://localhost:${server.port}`;
 });
 
@@ -243,4 +245,43 @@ describe('multiplayer room + game wire protocol', () => {
     },
     15000,
   );
+});
+
+describe('admin dashboard API auth', () => {
+  it('rejects /api/rooms with no Authorization header', async () => {
+    const response = await fetch(`${baseUrl}/api/rooms`);
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects /api/rooms with the wrong password', async () => {
+    const response = await fetch(`${baseUrl}/api/rooms`, {
+      headers: { authorization: 'Bearer not-the-password' },
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it('accepts /api/rooms with the correct password', async () => {
+    const response = await fetch(`${baseUrl}/api/rooms`, {
+      headers: { authorization: `Bearer ${DASHBOARD_PASSWORD}` },
+    });
+    expect(response.status).toBe(200);
+    expect(Array.isArray(await response.json())).toBe(true);
+  });
+
+  it('rejects kick/close without the password too, not just the rooms list', async () => {
+    const kicked = await fetch(`${baseUrl}/api/rooms/NOSUCH/kick`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ lobbyId: 'whatever' }),
+    });
+    expect(kicked.status).toBe(401);
+
+    const closed = await fetch(`${baseUrl}/api/rooms/NOSUCH`, { method: 'DELETE' });
+    expect(closed.status).toBe(401);
+  });
+
+  it('answers an OPTIONS preflight without requiring the password', async () => {
+    const response = await fetch(`${baseUrl}/api/rooms`, { method: 'OPTIONS' });
+    expect(response.status).toBe(204);
+  });
 });

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { createServer as createHttpServer, type IncomingMessage } from 'node:http';
 import { RoomManager } from './roomManager';
 import { createSocketServer } from './socketServer';
@@ -14,7 +15,19 @@ export * from './types';
 export interface RunningServer {
   port: number;
   io: GameSocketServer;
+  /** The passphrase actually in effect for the admin dashboard (see ServerOptions.dashboardPassword
+   * for where it comes from) — always defined so the caller can print/log it (see main.ts). */
+  dashboardPassword: string;
   close: () => Promise<void>;
+}
+
+export interface ServerOptions {
+  socket?: SocketServerOptions;
+  /** Passphrase required (as `Authorization: Bearer <password>`) for every /api/* admin-dashboard
+   * route. Defaults to the DASHBOARD_PASSWORD environment variable; if that's unset too, a fresh
+   * random one is generated on every startup — the dashboard is never left wide open by default,
+   * you just have to read the effective password off RunningServer/the startup log to use it. */
+  dashboardPassword?: string;
 }
 
 /** Reads and JSON-parses a request body — raw node:http doesn't do this for you. Caps at 1MB so a
@@ -48,9 +61,20 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
+/** Base32-ish (no ambiguous characters) random password, easy to read/type off a terminal —
+ * mirrors src/server/roomManager.ts's room-code alphabet for the same reason. */
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = randomBytes(16);
+  let out = '';
+  for (const byte of bytes) out += chars[byte % chars.length];
+  return out;
+}
+
 /** Boots the HTTP + Socket.IO server. Pass port 0 to bind an OS-assigned ephemeral port (tests). */
-export function startServer(port = 3001, socketOptions: SocketServerOptions = {}): Promise<RunningServer> {
+export function startServer(port = 3001, options: ServerOptions = {}): Promise<RunningServer> {
   return new Promise((resolve) => {
+    const dashboardPassword = options.dashboardPassword ?? process.env.DASHBOARD_PASSWORD ?? generatePassword();
     const roomManager = new RoomManager();
     const httpServer = createHttpServer((req, res) => {
       void (async () => {
@@ -60,21 +84,30 @@ export function startServer(port = 3001, socketOptions: SocketServerOptions = {}
           return;
         }
 
-        // Admin dashboard API — no authentication (matches the rest of this dev-only server).
-        // Don't expose this server on an untrusted network without adding one: it hands out
-        // every connected player's IP address and lets anyone reachable kick/close rooms.
-        // CORS is permissive here (matching Socket.IO's own `origin: '*'` below) so the dashboard
-        // still works when Vite serves the client on a different port than this server in dev.
-        // Must be checked before serveClientAsset below — once a client build exists, its SPA
-        // fallback (any unrecognized GET path -> index.html) would otherwise shadow every one of
-        // these routes, since /api/rooms doesn't correspond to a real file in dist-client/.
+        // Admin dashboard API — gated by a passphrase (see generatePassword/DASHBOARD_PASSWORD
+        // above) since it hands out every connected player's IP address and lets whoever has it
+        // kick/close rooms. CORS is permissive here (matching Socket.IO's own `origin: '*'`
+        // below) so the dashboard still works when Vite serves the client on a different port
+        // than this server in dev; Authorization has to be explicitly allowed too, since it's
+        // not one of the CORS-safelisted headers and would otherwise fail preflight.
+        // This whole block must be checked before serveClientAsset below — once a client build
+        // exists, its SPA fallback (any unrecognized GET path -> index.html) would otherwise
+        // shadow every one of these routes, since e.g. /api/rooms doesn't correspond to a real
+        // file in dist-client/.
         if (req.url?.startsWith('/api/')) {
           res.setHeader('Access-Control-Allow-Origin', '*');
           res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
           if (req.method === 'OPTIONS') {
             res.writeHead(204);
             res.end();
+            return;
+          }
+
+          const authHeader = req.headers.authorization;
+          if (authHeader !== `Bearer ${dashboardPassword}`) {
+            res.writeHead(401, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: '密碼錯誤或未輸入密碼。' }));
             return;
           }
         }
@@ -135,7 +168,7 @@ export function startServer(port = 3001, socketOptions: SocketServerOptions = {}
       })();
     });
 
-    const io = createSocketServer(httpServer, roomManager, socketOptions);
+    const io = createSocketServer(httpServer, roomManager, options.socket ?? {});
 
     httpServer.listen(port, () => {
       const address = httpServer.address();
@@ -143,6 +176,7 @@ export function startServer(port = 3001, socketOptions: SocketServerOptions = {}
       resolve({
         port: boundPort,
         io,
+        dashboardPassword,
         close: () => new Promise<void>((res, rej) => io.close((error) => (error ? rej(error) : res()))),
       });
     });
