@@ -9,3 +9,5 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22.15.0
+      - key: DASHBOARD_PASSWORD
+        sync: false
