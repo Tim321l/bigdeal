@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Card, PendingReaction } from '../types';
+import type { Card, PendingReaction, PropertyColor } from '../types';
 import { PaymentPicker } from './PaymentPicker';
 
 interface ReactionPromptProps {
@@ -7,6 +7,7 @@ interface ReactionPromptProps {
   sourceName: string;
   myHand: Card[];
   myBank: Card[];
+  myField: Record<PropertyColor, Card[]>;
   onRespond: (response: 'ACCEPT' | 'JUST_SAY_NO' | 'COUNTER', paymentCardIds?: string[]) => void;
 }
 
@@ -16,7 +17,7 @@ function isDebtReaction(pending: PendingReaction): boolean {
   return pending.card.type === 'RENT' || pending.card.actionType === 'BIRTHDAY' || pending.card.actionType === 'DEBT_COLLECTOR';
 }
 
-export function ReactionPrompt({ pending, sourceName, myHand, myBank, onRespond }: ReactionPromptProps) {
+export function ReactionPrompt({ pending, sourceName, myHand, myBank, myField, onRespond }: ReactionPromptProps) {
   const [showPayment, setShowPayment] = useState(false);
   const hasJustSayNo = myHand.some((card) => card.actionType === 'JUST_SAY_NO');
   const hasMarketTop = myHand.some((card) => card.actionType === 'MARKET_TOP');
@@ -24,11 +25,18 @@ export function ReactionPrompt({ pending, sourceName, myHand, myBank, onRespond 
   const amount = pending.amount ?? pending.card.value;
 
   if (showPayment) {
+    // 釘子戶-protected colors can't be forced out as payment, same protection they already have
+    // against Sly Deal/Forced Deal/Deal Breaker — mirrors the server-side check in chargePlayer.
+    const fieldProperties = (Object.keys(myField) as PropertyColor[]).flatMap((color) => {
+      if (myField[color].some((card) => card.actionType === 'NAIL_HOUSE')) return [];
+      return myField[color].filter((card) => card.type === 'PROPERTY');
+    });
     return (
       <PaymentPicker
         amount={amount}
         context={`${sourceName} 打出咗「${pending.card.name}」`}
         bank={myBank}
+        fieldProperties={fieldProperties}
         onConfirm={(cardIds) => onRespond('ACCEPT', cardIds)}
         onCancel={() => setShowPayment(false)}
       />

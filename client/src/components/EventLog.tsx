@@ -28,6 +28,8 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
       return `${nameOf(event.playerId)} 雙倍租金 x${event.multiplier}`;
     case 'PROPERTY_STOLEN':
       return `${nameOf(event.toPlayerId)} 由 ${nameOf(event.fromPlayerId)} 度搶咗一張物業`;
+    case 'PROPERTY_SURRENDERED_AS_PAYMENT':
+      return `${nameOf(event.fromPlayerId)} 銀行唔夠錢,俾埋一張物業畀 ${nameOf(event.toPlayerId)} 找數`;
     case 'SET_STOLEN':
       return `${nameOf(event.toPlayerId)} 強拍咗 ${nameOf(event.fromPlayerId)} 一套物業`;
     case 'PROPERTY_SWAPPED':

@@ -239,6 +239,10 @@ export type GameEvent =
   | { type: 'RENT_CHARGED'; fromPlayerId: string; toPlayerId: string; amount: number }
   | { type: 'RENT_MULTIPLIED'; playerId: string; multiplier: number }
   | { type: 'PROPERTY_STOLEN'; fromPlayerId: string; toPlayerId: string; cardId: string }
+  /** A property card given up to cover a debt because the payer's bank alone wasn't enough —
+   * distinct from PROPERTY_STOLEN (a targeted attack) even though the effect on ownership is the
+   * same; fired alongside the RENT_CHARGED that reports the total amount covered. */
+  | { type: 'PROPERTY_SURRENDERED_AS_PAYMENT'; fromPlayerId: string; toPlayerId: string; cardId: string; color: PropertyColor }
   | { type: 'SET_STOLEN'; fromPlayerId: string; toPlayerId: string; color: PropertyColor }
   | { type: 'PROPERTY_SWAPPED'; playerAId: string; playerBId: string; cardAId: string; cardBId: string }
   | { type: 'HAND_DISCARDED'; playerId: string; count: number }

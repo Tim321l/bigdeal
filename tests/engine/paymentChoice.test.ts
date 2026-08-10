@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction } from '../../src/engine/stateManager';
-import { cardById, makePlayer, makeState } from './testUtils';
+import { cardById, makeField, makePlayer, makeState } from './testUtils';
 
 describe('player-chosen payment (paymentCardIds)', () => {
   it('lets the payer choose which cards to give up instead of auto-picking the cheapest', () => {
@@ -159,5 +159,91 @@ describe('player-chosen payment (paymentCardIds)', () => {
     });
     // The hand card was never touched.
     expect(result.nextState.players[1]?.hand.map((c) => c.id)).toEqual([handOnlyMoney.id]);
+  });
+});
+
+describe('field properties as payment (real Monopoly Deal rule: transfers to the collector)', () => {
+  it('falls back to a built property when the bank alone is short, transferring it to the receiver', () => {
+    const debtCollector = cardById('action-debt-collector'); // demands $5M
+    const alice = makePlayer('player-1', 'Alice', { hand: [debtCollector] });
+    const builtProperty = cardById('estate-taikoo-shing'); // value 3
+    const bob = makePlayer('player-2', 'Bob', {
+      bank: [cardById('money-2m-a')], // $2M — short of the $5M owed
+      field: { ...makeField(), ESTATE: [builtProperty] },
+    });
+    const state = makeState({ players: [alice, bob] });
+
+    const played = applyAction(state, {
+      type: 'PLAY_CARD',
+      playerId: 'player-1',
+      cardId: debtCollector.id,
+      target: { playerId: 'player-2' },
+    });
+    const result = applyAction(played.nextState, { type: 'RESPOND', playerId: 'player-2', response: 'ACCEPT' });
+
+    expect(result.events).toContainEqual({
+      type: 'PROPERTY_SURRENDERED_AS_PAYMENT',
+      fromPlayerId: 'player-2',
+      toPlayerId: 'player-1',
+      cardId: builtProperty.id,
+      color: 'ESTATE',
+    });
+    expect(result.events).toContainEqual({ type: 'RENT_CHARGED', fromPlayerId: 'player-2', toPlayerId: 'player-1', amount: 5 });
+    // The property is now on Alice's field, not Bob's.
+    expect(result.nextState.players[1]?.field.ESTATE).toHaveLength(0);
+    expect(result.nextState.players[0]?.field.ESTATE.map((c) => c.id)).toEqual([builtProperty.id]);
+  });
+
+  it('exempts a 釘子戶-protected color, same as its protection against Sly Deal/Forced Deal/Deal Breaker', () => {
+    const debtCollector = cardById('action-debt-collector'); // demands $5M
+    const alice = makePlayer('player-1', 'Alice', { hand: [debtCollector] });
+    const protectedProperty = cardById('estate-taikoo-shing');
+    const nailHouse = cardById('action-nail-house');
+    const bob = makePlayer('player-2', 'Bob', {
+      bank: [cardById('money-2m-a')], // still short of $5M
+      field: { ...makeField(), ESTATE: [protectedProperty, nailHouse] },
+    });
+    const state = makeState({ players: [alice, bob], mode: 'CLASSIC' });
+
+    const played = applyAction(state, {
+      type: 'PLAY_CARD',
+      playerId: 'player-1',
+      cardId: debtCollector.id,
+      target: { playerId: 'player-2' },
+    });
+    const result = applyAction(played.nextState, { type: 'RESPOND', playerId: 'player-2', response: 'ACCEPT' });
+
+    // Not in BATTLE_ROYALE/REAL_BIG_DEAL, so this just underpays rather than going bankrupt —
+    // the protected property must stay untouched either way.
+    expect(result.events.some((e) => e.type === 'PROPERTY_SURRENDERED_AS_PAYMENT')).toBe(false);
+    expect(result.events).toContainEqual({ type: 'RENT_CHARGED', fromPlayerId: 'player-2', toPlayerId: 'player-1', amount: 2 });
+    expect(result.nextState.players[1]?.field.ESTATE.map((c) => c.id)).toEqual([protectedProperty.id, nailHouse.id]);
+  });
+
+  it('avoids bankruptcy in REAL_BIG_DEAL when unprotected field properties cover the shortfall', () => {
+    const debtCollector = cardById('action-debt-collector'); // demands $5M
+    const alice = makePlayer('player-1', 'Alice', { hand: [debtCollector] });
+    const propertyA = cardById('public-housing-tin-shing-yuen'); // value 1
+    const propertyB = cardById('tong-lau-apliu-street'); // value 2
+    const propertyC = cardById('estate-taikoo-shing'); // value 3 -> total field value 6, covers $5M
+    const bob = makePlayer('player-2', 'Bob', {
+      bank: [], // completely empty — would go bankrupt under the old bank-only rule
+      field: { ...makeField(), PUBLIC_HOUSING: [propertyA], OLD_TONG_LAU: [propertyB], ESTATE: [propertyC] },
+    });
+    const state = makeState({ players: [alice, bob], mode: 'REAL_BIG_DEAL' });
+
+    const played = applyAction(state, {
+      type: 'PLAY_CARD',
+      playerId: 'player-1',
+      cardId: debtCollector.id,
+      target: { playerId: 'player-2' },
+    });
+    const result = applyAction(played.nextState, { type: 'RESPOND', playerId: 'player-2', response: 'ACCEPT' });
+
+    expect(result.events.some((e) => e.type === 'PLAYER_ELIMINATED')).toBe(false);
+    expect(result.nextState.players[1]?.eliminated).toBeFalsy();
+    // Cheapest-first auto-pick: $1M + $2M properties, then needs $2M more from the $3M one =
+    // all three change hands, collecting $6M (no change given).
+    expect(result.events).toContainEqual({ type: 'RENT_CHARGED', fromPlayerId: 'player-2', toPlayerId: 'player-1', amount: 6 });
   });
 });

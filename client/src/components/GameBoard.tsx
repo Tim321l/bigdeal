@@ -342,6 +342,7 @@ export function GameBoard({ game, room, myGamePlayerId, recentEvents, onIntent, 
           sourceName={nameOf(game.pendingReaction.sourcePlayerId)}
           myHand={me.hand ?? []}
           myBank={me.bank}
+          myField={me.field}
           onRespond={respond}
         />
       )}

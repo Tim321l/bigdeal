@@ -895,6 +895,11 @@ button {
   background: rgba(0, 0, 0, 0.5);
 }
 
+.payment-picker__warning {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .modal--card-info .card-info__meta {
   color: var(--ink-soft);
   font-size: 0.85rem;

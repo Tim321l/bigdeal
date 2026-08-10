@@ -35,6 +35,11 @@ const HOTEL_RENT_BONUS = 4;
 const NO_IMPROVEMENT_COLOR: PropertyColor = 'TRANSPORT';
 /** BOSS_RAID: the co-op win condition must be met by this turn or everyone loses together. */
 const BOSS_RAID_TURN_LIMIT = 15;
+/** REAL_BIG_DEAL: every other mode starts players with an empty bank (they build it up from
+ * their first few draws), but REAL_BIG_DEAL needs bank cash immediately to buy the first tile it
+ * lands on — matching real Monopoly's starting cash rather than card-game Monopoly Deal's empty
+ * start. $8M covers 2-3 of the cheapest tiles without affording the priciest ones outright. */
+const REAL_BIG_DEAL_STARTING_CASH = 8;
 
 function emptyField(): Record<PropertyColor, Card[]> {
   const field = {} as Record<PropertyColor, Card[]>;
@@ -67,6 +72,14 @@ export function initGame(playerNames: string[], seed: number, mode: GameMode = '
     for (let i = 0; i < STARTING_HAND_SIZE; i++) {
       const card = deck.pop();
       if (card) player.hand.push(card);
+    }
+    if (mode === 'REAL_BIG_DEAL') {
+      player.bank.push({
+        id: `starting-cash-${player.id}`,
+        name: '起始資金',
+        type: 'MONEY',
+        value: REAL_BIG_DEAL_STARTING_CASH,
+      });
     }
   }
 
@@ -273,16 +286,25 @@ function chargePlayer(
     return;
   }
 
-  // Only bank cash is eligible to cover rent/debt charges — hand cards are never spent or counted
-  // toward what a player can pay, even automatically. A player can go bankrupt (or simply pay less
-  // than owed, outside BATTLE_ROYALE/REAL_BIG_DEAL) while still holding a full hand.
-  const available = payer.bank;
+  // Bank cash and field properties both count toward what a player can pay — matching real
+  // Monopoly Deal, where handing over a property card to cover a debt transfers it straight to
+  // whoever's collecting (not just its cash value). Hand cards never count. A 釘子戶-protected
+  // color is exempt from being forced out this way, the same protection it already has against
+  // Sly Deal/Forced Deal/Deal Breaker.
+  const payableFieldCards: { card: Card; color: PropertyColor }[] = [];
+  for (const color of PROPERTY_COLORS) {
+    if (isNailHouseProtected(payer, color)) continue;
+    for (const card of payer.field[color]) {
+      if (card.type === 'PROPERTY') payableFieldCards.push({ card, color });
+    }
+  }
+  const available = [...payer.bank, ...payableFieldCards.map((f) => f.card)];
   const totalAvailable = available.reduce((sum, card) => sum + card.value, 0);
 
   if ((state.mode === 'BATTLE_ROYALE' || state.mode === 'REAL_BIG_DEAL') && totalAvailable < amount) {
-    // Bankrupt: can't cover the charge from the bank alone. Bank, hand, and field all transfer to
-    // the collector (including every board tile the payer owned), and the payer is out for good —
-    // going bankrupt still means losing everything, not just the bank.
+    // Bankrupt: can't cover the charge even counting unprotected field properties. Bank, hand,
+    // and field all transfer to the collector regardless of nail-house protection — going
+    // bankrupt still means losing everything, not just what was up for voluntary payment.
     receiver.bank.push(...payer.bank, ...payer.hand);
     payer.bank = [];
     payer.hand = [];
@@ -309,9 +331,18 @@ function chargePlayer(
 
   const paidIds = new Set(payable.map((card) => card.id));
   const collected = payable.reduce((sum, card) => sum + card.value, 0);
+  const paidFieldCardIds = new Set(payableFieldCards.filter((f) => paidIds.has(f.card.id)).map((f) => f.card.id));
 
   payer.bank = payer.bank.filter((card) => !paidIds.has(card.id));
-  receiver.bank.push(...payable);
+  for (const { card, color } of payableFieldCards) {
+    if (!paidFieldCardIds.has(card.id)) continue;
+    const index = payer.field[color].findIndex((c) => c.id === card.id);
+    if (index !== -1) payer.field[color].splice(index, 1);
+    receiver.field[color].push(card);
+    events.push({ type: 'PROPERTY_SURRENDERED_AS_PAYMENT', fromPlayerId: payer.id, toPlayerId: receiver.id, cardId: card.id, color });
+  }
+  const paidBankCards = payable.filter((card) => !paidFieldCardIds.has(card.id));
+  receiver.bank.push(...paidBankCards);
 
   events.push({ type: 'RENT_CHARGED', fromPlayerId: payer.id, toPlayerId: receiver.id, amount: collected });
 }

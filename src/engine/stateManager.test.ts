@@ -55,6 +55,20 @@ describe('initGame', () => {
     expect(state.deck).toHaveLength(CARDS.length - 15);
     expect(state.phase).toBe('TURN_START');
   });
+
+  it('starts every player with an empty bank outside REAL_BIG_DEAL', () => {
+    const state = initGame(['Alice', 'Bob'], 42, 'CLASSIC');
+    for (const player of state.players) {
+      expect(player.bank).toHaveLength(0);
+    }
+  });
+
+  it('gives REAL_BIG_DEAL players $8M starting cash, matching the board game rather than an empty card-game start', () => {
+    const state = initGame(['Alice', 'Bob'], 42, 'REAL_BIG_DEAL');
+    for (const player of state.players) {
+      expect(player.bank.reduce((sum, c) => sum + c.value, 0)).toBe(8);
+    }
+  });
 });
 
 describe('DRAW', () => {
