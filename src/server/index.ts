@@ -1,10 +1,18 @@
 import { randomBytes } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer, type IncomingMessage } from 'node:http';
+import { dirname, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { RoomManager } from './roomManager';
 import { createSocketServer } from './socketServer';
 import type { GameSocketServer, SocketServerOptions } from './socketServer';
 import { serveClientAsset } from './staticClient';
 import { toRoomSummary } from './types';
+
+// Two levels up from src/server/ (dev, via tsx) or dist/server/ (prod, after tsc build) is the
+// project root either way — same trick as staticClient.ts's CLIENT_DIST. The `.local` suffix
+// piggybacks on the existing `*.local` gitignore rule, so this never needs its own entry.
+const PASSWORD_FILE = resolvePath(dirname(fileURLToPath(import.meta.url)), '../../.dashboard-password.local');
 
 export { RoomManager, MIN_PLAYERS, MAX_PLAYERS } from './roomManager';
 export { sanitizeStateFor } from './sanitize';
@@ -24,9 +32,10 @@ export interface RunningServer {
 export interface ServerOptions {
   socket?: SocketServerOptions;
   /** Passphrase required (as `Authorization: Bearer <password>`) for every /api/* admin-dashboard
-   * route. Defaults to the DASHBOARD_PASSWORD environment variable; if that's unset too, a fresh
-   * random one is generated on every startup — the dashboard is never left wide open by default,
-   * you just have to read the effective password off RunningServer/the startup log to use it. */
+   * route. See resolveDashboardPassword: defaults to DASHBOARD_PASSWORD, then a password
+   * persisted in .dashboard-password.local, generating and saving a new one only if neither
+   * exists yet — the dashboard is never left wide open by default, and the password stays stable
+   * across restarts instead of changing every time. */
   dashboardPassword?: string;
 }
 
@@ -71,10 +80,40 @@ function generatePassword(): string {
   return out;
 }
 
+/**
+ * A brand-new random password every single process start (the original behavior) turned out to
+ * be more confusing than secure in practice: `tsx watch` restarting on a save, a second terminal,
+ * or this session's own test/verification server all mint a *different* password, so whatever
+ * you last saw printed stops working with no obvious reason why. Persisting the generated
+ * password to a local file fixes that — every process on this machine reads/writes the same file,
+ * so it stays stable across restarts, while an explicit DASHBOARD_PASSWORD still overrides it and
+ * needs no file at all.
+ */
+function resolveDashboardPassword(explicit: string | undefined): string {
+  if (explicit) return explicit;
+  if (process.env.DASHBOARD_PASSWORD) return process.env.DASHBOARD_PASSWORD;
+
+  try {
+    const existing = readFileSync(PASSWORD_FILE, 'utf8').trim();
+    if (existing) return existing;
+  } catch {
+    // No file yet (first run) or unreadable — fall through and generate + (try to) persist one.
+  }
+
+  const generated = generatePassword();
+  try {
+    writeFileSync(PASSWORD_FILE, generated, 'utf8');
+  } catch {
+    // Read-only filesystem or similar — the server still works, it just won't remember this
+    // password past this process, same as the old always-regenerate behavior.
+  }
+  return generated;
+}
+
 /** Boots the HTTP + Socket.IO server. Pass port 0 to bind an OS-assigned ephemeral port (tests). */
 export function startServer(port = 3001, options: ServerOptions = {}): Promise<RunningServer> {
   return new Promise((resolve) => {
-    const dashboardPassword = options.dashboardPassword ?? process.env.DASHBOARD_PASSWORD ?? generatePassword();
+    const dashboardPassword = resolveDashboardPassword(options.dashboardPassword);
     const roomManager = new RoomManager();
     const httpServer = createHttpServer((req, res) => {
       void (async () => {
