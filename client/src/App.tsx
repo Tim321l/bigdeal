@@ -1,3 +1,4 @@
+import { Dashboard } from './components/Dashboard';
 import { GameBoard } from './components/GameBoard';
 import { LandingScreen } from './components/LandingScreen';
 import { WaitingRoom } from './components/WaitingRoom';
@@ -25,6 +26,10 @@ export default function App() {
     leaveSession,
     clearError,
   } = useGameConnection();
+
+  if (window.location.pathname === '/dashboard') {
+    return <Dashboard />;
+  }
 
   const content =
     game && myGamePlayerId ? (

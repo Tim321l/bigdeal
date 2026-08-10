@@ -398,3 +398,80 @@ describe('match history', () => {
     expect(['Human', '機械人 1 (Lv.3)']).toContain(history[0]?.winnerName);
   });
 });
+
+describe('getRoomsSummary (admin dashboard)', () => {
+  it('lists every room with each player IP included, unlike the public RoomSummary', () => {
+    const manager = new RoomManager();
+    unwrap(manager.createRoom('Alice', 'socket-alice', '203.0.113.5'));
+    const summaries = manager.getRoomsSummary();
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.players[0]).toMatchObject({ name: 'Alice', ip: '203.0.113.5' });
+  });
+
+  it('returns an empty list when there are no rooms', () => {
+    const manager = new RoomManager();
+    expect(manager.getRoomsSummary()).toEqual([]);
+  });
+});
+
+describe('kickPlayer (admin dashboard)', () => {
+  it('fully evicts the player from a LOBBY room and reassigns the host if needed', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    const { lobbyId: bobId } = unwrap(manager.joinRoom(room.id, 'Bob', 'socket-bob'));
+
+    const kicked = unwrap(manager.kickPlayer(room.id, hostId));
+    expect(kicked.socketId).toBe('socket-alice');
+    expect(kicked.room?.players.map((p) => p.lobbyId)).toEqual([bobId]);
+    expect(kicked.room?.hostLobbyId).toBe(bobId);
+  });
+
+  it('deletes the room entirely when kicking the last remaining player', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+
+    const kicked = unwrap(manager.kickPlayer(room.id, hostId));
+    expect(kicked.room).toBeUndefined();
+    expect(manager.getRoom(room.id)).toBeUndefined();
+  });
+
+  it('only marks a mid-game player disconnected, without removing their seat', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    unwrap(manager.addBot(room.id, hostId, 2));
+    unwrap(manager.setReady(room.id, hostId, true));
+
+    const kicked = unwrap(manager.kickPlayer(room.id, hostId));
+    expect(kicked.room?.status).toBe('IN_PROGRESS');
+    expect(kicked.room?.players).toHaveLength(2);
+    const alice = kicked.room?.players.find((p) => p.lobbyId === hostId);
+    expect(alice?.connected).toBe(false);
+    expect(alice?.socketId).toBeUndefined();
+  });
+
+  it('rejects kicking a player from an unknown room or an unknown player', () => {
+    const manager = new RoomManager();
+    const { room } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    expect(manager.kickPlayer('NOSUCH', 'whatever')).toEqual({ ok: false, error: 'Room not found.' });
+    expect(manager.kickPlayer(room.id, 'nobody')).toEqual({ ok: false, error: 'That player is not in this room.' });
+  });
+});
+
+describe('closeRoom (admin dashboard)', () => {
+  it('deletes the room and returns every connected socket id to disconnect', () => {
+    const manager = new RoomManager();
+    const { room } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    unwrap(manager.joinRoom(room.id, 'Bob', 'socket-bob'));
+    unwrap(manager.spectate(room.id, 'socket-watcher'));
+
+    const closed = unwrap(manager.closeRoom(room.id));
+    expect(closed.socketIds.sort()).toEqual(['socket-alice', 'socket-bob', 'socket-watcher'].sort());
+    expect(manager.getRoom(room.id)).toBeUndefined();
+  });
+
+  it('rejects closing an unknown room', () => {
+    const manager = new RoomManager();
+    expect(manager.closeRoom('NOSUCH')).toEqual({ ok: false, error: 'Room not found.' });
+  });
+});

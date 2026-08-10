@@ -16,6 +16,8 @@ export type {
 export type { SanitizedGameState, SanitizedPendingAuction, SanitizedPlayer } from '../../src/server/sanitize';
 export type {
   AckResult,
+  AdminPlayer,
+  AdminRoomSummary,
   ClientToServerEvents,
   JoinAckData,
   MatchResult,

@@ -2,7 +2,8 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { type BotLevel, decideBotAction } from '../engine/bot';
 import { applyAction, initGame } from '../engine/stateManager';
 import type { ActionPayload, GameEvent, GameMode, GameState } from '../types/game';
-import type { MatchResult, Room, RoomPlayer } from './types';
+import { toAdminRoomSummary } from './types';
+import type { AdminRoomSummary, MatchResult, Room, RoomPlayer } from './types';
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 5;
@@ -32,12 +33,19 @@ export class RoomManager {
     return this.rooms.get(roomId);
   }
 
+  /** Admin-dashboard-only — includes every player's IP, so this must never be broadcast to
+   * regular player clients (see toAdminRoomSummary). */
+  getRoomsSummary(): AdminRoomSummary[] {
+    return [...this.rooms.values()].map(toAdminRoomSummary);
+  }
+
   createRoom(
     hostName: string,
     socketId: string,
+    ip?: string,
     seed: number = randomInt(0, 2 ** 31),
   ): RoomResult<{ room: Room; lobbyId: string; reconnectToken: string }> {
-    const player = this.makePlayer(hostName, socketId);
+    const player = this.makePlayer(hostName, socketId, ip);
     const room: Room = {
       id: this.generateRoomCode(),
       status: 'LOBBY',
@@ -57,13 +65,14 @@ export class RoomManager {
     roomId: string,
     playerName: string,
     socketId: string,
+    ip?: string,
   ): RoomResult<{ room: Room; lobbyId: string; reconnectToken: string }> {
     const room = this.rooms.get(roomId);
     if (!room) return err('Room not found.');
     if (room.status !== 'LOBBY') return err('Room is not accepting new players.');
     if (room.players.length >= MAX_PLAYERS) return err('Room is full.');
 
-    const player = this.makePlayer(playerName, socketId);
+    const player = this.makePlayer(playerName, socketId, ip);
     room.players.push(player);
     return ok({ room, lobbyId: player.lobbyId, reconnectToken: player.reconnectToken });
   }
@@ -82,6 +91,53 @@ export class RoomManager {
       room.hostLobbyId = room.players[0]!.lobbyId;
     }
     return ok({ room });
+  }
+
+  /**
+   * Admin-dashboard-only: force a player out. In LOBBY this fully evicts them (same as
+   * leaveRoom, host reassignment included) since a lingering disconnected seat would otherwise
+   * block the room from ever starting. Mid-game there's no safe way to remove a seat without
+   * breaking the engine's positional gamePlayerId assumptions, so this just marks them
+   * disconnected instead — same effect as them dropping on their own. Either way the caller is
+   * responsible for actually severing their live socket connection (this method only updates
+   * room state); the returned socketId is who to disconnect.
+   */
+  kickPlayer(roomId: string, lobbyId: string): RoomResult<{ room: Room | undefined; socketId: string | undefined }> {
+    const room = this.rooms.get(roomId);
+    if (!room) return err('Room not found.');
+    const player = room.players.find((p) => p.lobbyId === lobbyId);
+    if (!player) return err('That player is not in this room.');
+    const socketId = player.socketId;
+
+    if (room.status === 'LOBBY') {
+      room.players = room.players.filter((p) => p.lobbyId !== lobbyId);
+      if (room.players.length === 0) {
+        this.rooms.delete(roomId);
+        return ok({ room: undefined, socketId });
+      }
+      if (room.hostLobbyId === lobbyId) {
+        room.hostLobbyId = room.players[0]!.lobbyId;
+      }
+      return ok({ room, socketId });
+    }
+
+    player.connected = false;
+    player.socketId = undefined;
+    return ok({ room, socketId });
+  }
+
+  /** Admin-dashboard-only: force-delete a room outright, mid-game or not. Returns every
+   * connected player/spectator socket id still in it so the caller can disconnect them. */
+  closeRoom(roomId: string): RoomResult<{ socketIds: string[] }> {
+    const room = this.rooms.get(roomId);
+    if (!room) return err('Room not found.');
+
+    const socketIds = [
+      ...room.players.map((p) => p.socketId).filter((id): id is string => !!id),
+      ...room.spectatorSocketIds,
+    ];
+    this.rooms.delete(roomId);
+    return ok({ socketIds });
   }
 
   setReady(roomId: string, lobbyId: string, ready: boolean): RoomResult<{ room: Room; started: boolean }> {
@@ -106,6 +162,7 @@ export class RoomManager {
     lobbyId: string,
     reconnectToken: string,
     socketId: string,
+    ip?: string,
   ): RoomResult<{ room: Room }> {
     const room = this.rooms.get(roomId);
     if (!room) return err('Room not found.');
@@ -115,6 +172,7 @@ export class RoomManager {
 
     player.connected = true;
     player.socketId = socketId;
+    player.ip = ip;
     return ok({ room });
   }
 
@@ -287,7 +345,7 @@ export class RoomManager {
     return undefined;
   }
 
-  private makePlayer(name: string, socketId: string): RoomPlayer {
+  private makePlayer(name: string, socketId: string, ip: string | undefined): RoomPlayer {
     return {
       lobbyId: randomUUID(),
       name,
@@ -295,6 +353,7 @@ export class RoomManager {
       connected: true,
       socketId,
       reconnectToken: randomUUID(),
+      ip,
     };
   }
 

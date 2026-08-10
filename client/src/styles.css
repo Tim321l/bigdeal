@@ -466,6 +466,105 @@ button {
   background: var(--danger);
 }
 
+/* --- Admin dashboard --- */
+
+.dashboard {
+  max-width: 960px;
+  margin: 40px auto;
+  padding: 0 20px 60px;
+}
+
+.dashboard h1 {
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.dashboard__rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-room {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.dashboard-room__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.dashboard-room__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+}
+
+.dashboard-room__header h2 a {
+  color: var(--accent);
+}
+
+.dashboard-room__meta {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+/* Compound selectors (not just the modifier class alone) so these reliably beat the base .badge
+ * background regardless of source order, instead of depending on this block staying after it. */
+.badge.dashboard-room__status--lobby {
+  background: var(--gold);
+}
+
+.badge.dashboard-room__status--in_progress {
+  background: var(--success);
+}
+
+.badge.dashboard-room__status--finished {
+  background: var(--ink-soft);
+}
+
+.dashboard-room__header .btn {
+  margin-left: auto;
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.dashboard-table th {
+  text-align: left;
+  color: var(--ink-soft);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.dashboard-table tr:last-child td {
+  border-bottom: none;
+}
+
+.dashboard-table .status-dot {
+  display: inline-block;
+  margin-right: 6px;
+}
+
 /* --- Game board --- */
 
 .game-board {

@@ -17,6 +17,9 @@ export interface RoomPlayer {
   gamePlayerId?: string | undefined;
   /** Present only for bot seats — no real socket ever connects for these. */
   bot?: { level: BotLevel } | undefined;
+  /** socket.handshake.address at join/reconnect time — admin-dashboard-only, never included in
+   * RoomSummary/PublicRoomPlayer (other players must never see each other's IP). */
+  ip?: string | undefined;
 }
 
 export interface Room {
@@ -71,6 +74,49 @@ export function toRoomSummary(room: Room): RoomSummary {
     players: room.players.map((player) => ({
       lobbyId: player.lobbyId,
       name: player.name,
+      ready: player.ready,
+      connected: player.connected,
+      gamePlayerId: player.gamePlayerId,
+      bot: player.bot,
+    })),
+    spectatorCount: room.spectatorSocketIds.size,
+  };
+}
+
+/** Admin-dashboard-only view — unlike RoomSummary, this includes each player's IP address, so it
+ * must only ever be served from the unauthenticated-but-not-broadcast /api/rooms HTTP endpoint,
+ * never emitted over the room:state socket event that every player in the room receives. */
+export interface AdminPlayer {
+  lobbyId: string;
+  name: string;
+  ip?: string | undefined;
+  ready: boolean;
+  connected: boolean;
+  gamePlayerId?: string | undefined;
+  bot?: { level: BotLevel } | undefined;
+}
+
+export interface AdminRoomSummary {
+  id: string;
+  status: RoomStatus;
+  mode: GameMode;
+  hostLobbyId: string;
+  createdAt: number;
+  players: AdminPlayer[];
+  spectatorCount: number;
+}
+
+export function toAdminRoomSummary(room: Room): AdminRoomSummary {
+  return {
+    id: room.id,
+    status: room.status,
+    mode: room.mode,
+    hostLobbyId: room.hostLobbyId,
+    createdAt: room.createdAt,
+    players: room.players.map((player) => ({
+      lobbyId: player.lobbyId,
+      name: player.name,
+      ip: player.ip,
       ready: player.ready,
       connected: player.connected,
       gamePlayerId: player.gamePlayerId,

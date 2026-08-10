@@ -46,7 +46,7 @@ const SPECTATOR_VIEWER_ID = '__spectator__';
 
 export type GameSocketServer = Server<ClientToServerEvents, ServerToClientEvents>;
 
-export function createSocketServer(httpServer: HttpServer, roomManager: RoomManager = new RoomManager()): GameSocketServer {
+export function createSocketServer(httpServer: HttpServer, roomManager: RoomManager): GameSocketServer {
   const io: GameSocketServer = new Server(httpServer, {
     // Permissive for local development; tighten before deploying behind a real origin.
     cors: { origin: '*' },
@@ -100,7 +100,7 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
 
   io.on('connection', (socket) => {
     socket.on('room:create', ({ playerName }, ack) => {
-      const result = roomManager.createRoom(playerName, socket.id);
+      const result = roomManager.createRoom(playerName, socket.id, socket.handshake.address);
       if (!result.ok) {
         ack({ ok: false, error: result.error });
         return;
@@ -113,7 +113,7 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
     });
 
     socket.on('room:join', ({ roomId, playerName }, ack) => {
-      const result = roomManager.joinRoom(roomId, playerName, socket.id);
+      const result = roomManager.joinRoom(roomId, playerName, socket.id, socket.handshake.address);
       if (!result.ok) {
         ack({ ok: false, error: result.error });
         return;
@@ -126,7 +126,7 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
     });
 
     socket.on('room:reconnect', ({ roomId, lobbyId, reconnectToken }, ack) => {
-      const result = roomManager.reconnect(roomId, lobbyId, reconnectToken, socket.id);
+      const result = roomManager.reconnect(roomId, lobbyId, reconnectToken, socket.id, socket.handshake.address);
       if (!result.ok) {
         ack({ ok: false, error: result.error });
         return;
