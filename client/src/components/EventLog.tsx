@@ -1,4 +1,19 @@
+import { useEffect, useRef, useState } from 'react';
+import { CARDS } from '../../../src/data/cards';
+import { tileCard } from '../../../src/engine/board';
+import { COLOR_LABELS } from '../labels';
 import type { GameEvent } from '../types';
+
+/** Resolves a card id back to its printed name for the log — most GameEvents only carry the id,
+ * not the full card, to keep the wire payload small. Falls back to the raw id if somehow unknown
+ * (should never happen with real card ids, but a log line is not worth a crash over it). */
+function cardName(cardId: string): string {
+  return CARDS.find((c) => c.id === cardId)?.name ?? cardId;
+}
+
+function tileName(tileIndex: number): string {
+  return tileCard(tileIndex)?.name ?? `第 ${tileIndex} 格`;
+}
 
 function describeEvent(event: GameEvent, nameOf: (id: string) => string): string {
   switch (event.type) {
@@ -11,9 +26,9 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
     case 'MACRO_EVENT_EXPIRED':
       return '一個事件完結咗';
     case 'CARD_BANKED':
-      return `${nameOf(event.playerId)} 存入銀行 $${event.amount}M`;
+      return `${nameOf(event.playerId)} 將「${cardName(event.cardId)}」存入銀行,+$${event.amount}M`;
     case 'PROPERTY_BUILT':
-      return `${nameOf(event.playerId)} 起咗樓`;
+      return `${nameOf(event.playerId)} 喺「${COLOR_LABELS[event.color]}」起咗「${cardName(event.cardId)}」`;
     case 'REACTION_REQUESTED':
       return `${nameOf(event.playerId)} 要回應「${event.card.name}」`;
     case 'REACTION_RESOLVED':
@@ -27,13 +42,15 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
     case 'RENT_MULTIPLIED':
       return `${nameOf(event.playerId)} 雙倍租金 x${event.multiplier}`;
     case 'PROPERTY_STOLEN':
-      return `${nameOf(event.toPlayerId)} 由 ${nameOf(event.fromPlayerId)} 度搶咗一張物業`;
+      return `${nameOf(event.toPlayerId)} 用搶樓由 ${nameOf(event.fromPlayerId)} 度搶咗「${cardName(event.cardId)}」`;
     case 'PROPERTY_SURRENDERED_AS_PAYMENT':
-      return `${nameOf(event.fromPlayerId)} 銀行唔夠錢,俾埋一張物業畀 ${nameOf(event.toPlayerId)} 找數`;
+      return `${nameOf(event.fromPlayerId)} 銀行唔夠錢,俾埋「${cardName(event.cardId)}」畀 ${nameOf(event.toPlayerId)} 找數`;
     case 'SET_STOLEN':
-      return `${nameOf(event.toPlayerId)} 強拍咗 ${nameOf(event.fromPlayerId)} 一套物業`;
+      return `${nameOf(event.toPlayerId)} 強拍咗 ${nameOf(event.fromPlayerId)} 成套「${COLOR_LABELS[event.color]}」`;
     case 'PROPERTY_SWAPPED':
-      return `${nameOf(event.playerAId)} 同 ${nameOf(event.playerBId)} 交換咗物業`;
+      // playerA offered cardA (their own) and received cardB (playerB's) — see FORCED_DEAL in
+      // stateManager.ts: source=playerA/offeredCard=cardA, target=playerB/targetCard=cardB.
+      return `${nameOf(event.playerAId)} 用「${cardName(event.cardAId)}」同 ${nameOf(event.playerBId)} 換咗「${cardName(event.cardBId)}」`;
     case 'HAND_DISCARDED':
       return `${nameOf(event.playerId)} 棄咗 ${event.count} 張牌`;
     case 'HAND_CARD_STOLEN':
@@ -41,17 +58,17 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
         ? `${nameOf(event.toPlayerId)} 打荷包,由 ${nameOf(event.fromPlayerId)} 度偷咗一張手牌`
         : `${nameOf(event.toPlayerId)} 想打荷包,但 ${nameOf(event.fromPlayerId)} 手牌係空嘅`;
     case 'PROPERTY_PROTECTED':
-      return `${nameOf(event.playerId)} 用釘子戶保護咗一套物業`;
+      return `${nameOf(event.playerId)} 用釘子戶保護咗成套「${COLOR_LABELS[event.color]}」`;
     case 'IMPROVEMENT_STRIPPED':
-      return `${nameOf(event.toPlayerId)} 用圍標天價維修拆走咗 ${nameOf(event.fromPlayerId)} 嘅洋樓/酒店`;
+      return `${nameOf(event.toPlayerId)} 用圍標天價維修拆走咗 ${nameOf(event.fromPlayerId)} 「${COLOR_LABELS[event.color]}」嘅洋樓/酒店`;
     case 'PROPERTY_STIGMATIZED':
-      return `${nameOf(event.toPlayerId)} 用凶宅傳聞逼 ${nameOf(event.fromPlayerId)} 棄咗一張物業`;
+      return `${nameOf(event.toPlayerId)} 用凶宅傳聞逼 ${nameOf(event.fromPlayerId)} 棄咗「${cardName(event.cardId)}」`;
     case 'BANK_WITHDRAWN':
       return `${nameOf(event.playerId)} 用提款機壞咗,由銀行攞返 ${event.count} 張卡入手牌`;
     case 'BANK_RENT_LAUNDERED':
       return `${nameOf(event.playerId)} 洗黑錢,由銀行直接發動咗一張租單`;
     case 'BANK_CARD_SEIZED':
-      return `${nameOf(event.toPlayerId)} 用接管清盤人,由 ${nameOf(event.fromPlayerId)} 銀行度攞走一張卡`;
+      return `${nameOf(event.toPlayerId)} 用接管清盤人,由 ${nameOf(event.fromPlayerId)} 銀行度攞走「${cardName(event.cardId)}」`;
     case 'CARD_BURIED':
       return `${nameOf(event.playerId)} 用逆按揭,將一張銀行卡放返落牌組底,補抽咗新手牌`;
     case 'PLAYER_ELIMINATED':
@@ -75,11 +92,11 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
     case 'PASSED_GO':
       return `🏁 ${nameOf(event.playerId)} 行過龍(起點),攞咗 $${event.amount}M`;
     case 'TILE_PURCHASED':
-      return `🏠 ${nameOf(event.playerId)} 用 $${event.price}M 買起咗第 ${event.tileIndex} 格地皮`;
+      return `🏠 ${nameOf(event.playerId)} 用 $${event.price}M 買起咗「${tileName(event.tileIndex)}」`;
     case 'TILE_DECLINED':
-      return `${nameOf(event.playerId)} 唔買第 ${event.tileIndex} 格地皮`;
+      return `${nameOf(event.playerId)} 唔買「${tileName(event.tileIndex)}」`;
     case 'TRANSIT_TELEPORTED':
-      return `🚆 ${nameOf(event.playerId)} 搭去咗第 ${event.toPosition} 格交通基建`;
+      return `🚆 ${nameOf(event.playerId)} 搭去咗「${tileName(event.toPosition)}」`;
     case 'RENOVATION_STARTED':
       return `🚧 ${nameOf(event.playerId)} 踩中維修中地盤,下一次擲骰會被跳過`;
     case 'RENOVATION_SKIPPED':
@@ -100,6 +117,23 @@ function describeEvent(event: GameEvent, nameOf: (id: string) => string): string
 }
 
 export function EventLog({ events, nameOf }: { events: GameEvent[]; nameOf: (id: string) => string }) {
+  // Bot actions now arrive one at a time instead of in one big burst (see socketServer.ts), so
+  // briefly highlighting whichever entry just landed gives the eye something concrete to follow
+  // instead of having to re-scan the whole list on every update.
+  const [highlightKey, setHighlightKey] = useState<number | null>(null);
+  const prevLengthRef = useRef(events.length);
+  useEffect(() => {
+    if (events.length > prevLengthRef.current) {
+      const newestKey = events.length - 1;
+      setHighlightKey(newestKey);
+      const timer = setTimeout(() => setHighlightKey((k) => (k === newestKey ? null : k)), 1600);
+      prevLengthRef.current = events.length;
+      return () => clearTimeout(timer);
+    }
+    prevLengthRef.current = events.length;
+    return undefined;
+  }, [events]);
+
   if (events.length === 0) return null;
   const recent = [...events].reverse().slice(0, 20);
 
@@ -107,9 +141,14 @@ export function EventLog({ events, nameOf }: { events: GameEvent[]; nameOf: (id:
     <div className="event-log">
       <h4>動態</h4>
       <ul>
-        {recent.map((event, index) => (
-          <li key={index}>{describeEvent(event, nameOf)}</li>
-        ))}
+        {recent.map((event, index) => {
+          const key = events.length - 1 - index;
+          return (
+            <li key={key} className={key === highlightKey ? 'event-log__item--new' : undefined}>
+              {describeEvent(event, nameOf)}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

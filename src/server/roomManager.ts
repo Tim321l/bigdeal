@@ -270,31 +270,43 @@ export class RoomManager {
   }
 
   /**
-   * Drives every bot whose turn (or reaction) it currently is, one decision at a time, until a
-   * human needs to act or the game ends. Runs directly through applyAction — bots have no
-   * socket session to authenticate through submitIntent, and don't need one: this is trusted
-   * server-internal decision-making, not untrusted client input.
+   * Runs exactly one bot decision (its next action or reaction) and applies it — the primitive
+   * the live server paces with real per-step delays (see socketServer.ts's runBotsAndBroadcast)
+   * so a human watching can actually follow along one action at a time, instead of an entire bot
+   * turn (or several bots' turns in a row) resolving in one instant, unpaced burst. Runs directly
+   * through applyAction — bots have no socket session to authenticate through submitIntent, and
+   * don't need one: this is trusted server-internal decision-making, not untrusted client input.
+   * Returns null if it isn't currently a bot's turn (nothing to step).
    */
-  processBotTurns(roomId: string): GameEvent[] {
+  processSingleBotStep(roomId: string): GameEvent[] | null {
     const room = this.rooms.get(roomId);
-    if (!room || room.status !== 'IN_PROGRESS' || !room.gameState) return [];
+    if (!room || room.status !== 'IN_PROGRESS' || !room.gameState) return null;
+    const actorId = this.currentActorId(room.gameState);
+    if (!actorId) return null;
+    const actor = room.players.find((p) => p.gamePlayerId === actorId);
+    if (!actor?.bot) return null;
 
+    const action = decideBotAction(room.gameState, actorId, actor.bot.level);
+    const { nextState, events } = applyAction(room.gameState, action);
+    room.gameState = nextState;
+    if (nextState.phase === 'GAME_OVER') {
+      room.status = 'FINISHED';
+      this.recordHistory(room, nextState);
+    }
+    return events;
+  }
+
+  /** Drives every bot whose turn (or reaction) it currently is, all the way through to a human's
+   * turn or the game's end, in one synchronous batch — built on processSingleBotStep. Used by
+   * tests and anywhere else that wants the end result without caring about pacing; the live
+   * server uses processSingleBotStep directly instead, precisely so it *can* pace each step. */
+  processBotTurns(roomId: string): GameEvent[] {
     const allEvents: GameEvent[] = [];
     for (let step = 0; step < MAX_BOT_STEPS; step++) {
-      const actorId = this.currentActorId(room.gameState);
-      if (!actorId) break;
-      const actor = room.players.find((p) => p.gamePlayerId === actorId);
-      if (!actor?.bot) break;
-
-      const action = decideBotAction(room.gameState, actorId, actor.bot.level);
-      const { nextState, events } = applyAction(room.gameState, action);
-      room.gameState = nextState;
+      const events = this.processSingleBotStep(roomId);
+      if (events === null) break;
       allEvents.push(...events);
-      if (nextState.phase === 'GAME_OVER') {
-        room.status = 'FINISHED';
-        this.recordHistory(room, nextState);
-        break;
-      }
+      if (this.rooms.get(roomId)?.status !== 'IN_PROGRESS') break;
     }
     return allEvents;
   }

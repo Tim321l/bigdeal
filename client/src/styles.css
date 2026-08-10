@@ -1155,6 +1155,23 @@ button {
   border: 1px solid var(--border);
 }
 
+.event-log__item--new {
+  border-color: var(--gold);
+  background: #fff4d6;
+  animation: event-log-flash-in 1.6s ease-out;
+}
+
+@keyframes event-log-flash-in {
+  0% {
+    transform: translateX(-6px);
+    opacity: 0;
+  }
+  15% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 /* --- REAL_BIG_DEAL board --- */
 
 .board-section {
@@ -1772,7 +1789,8 @@ button {
   .rent-cascade__item,
   .rent-cascade__shockwave,
   .nail-house-shield,
-  .nail-house-shield__icon {
+  .nail-house-shield__icon,
+  .event-log__item--new {
     animation: none !important;
   }
 }

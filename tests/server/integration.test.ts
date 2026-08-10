@@ -11,7 +11,9 @@ let server: RunningServer;
 let baseUrl: string;
 
 beforeAll(async () => {
-  server = await startServer(0);
+  // Real play paces each bot action for legibility (see socketServer.ts) — tests want the
+  // fastest bot-vs-human game they can get instead.
+  server = await startServer(0, { botStepDelayMs: 0 });
   baseUrl = `http://localhost:${server.port}`;
 });
 
@@ -32,6 +34,21 @@ function waitForRoomState(socket: ClientSocket): Promise<RoomSummary> {
 
 function waitForGameState(socket: ClientSocket): Promise<SanitizedGameState> {
   return new Promise((resolve) => socket.once('game:state', resolve));
+}
+
+/** Bot turns now broadcast one game:state per individual bot action (paced for legibility — see
+ * socketServer.ts) instead of one state per whole bot rotation, so waiting for the *first*
+ * game:state after a hand-off to bots would just catch it mid-turn. This waits for the first one
+ * matching a predicate instead, e.g. "it's the human's turn again." */
+function waitForGameStateWhere(socket: ClientSocket, predicate: (state: SanitizedGameState) => boolean): Promise<SanitizedGameState> {
+  return new Promise((resolve) => {
+    const handler = (state: SanitizedGameState): void => {
+      if (!predicate(state)) return;
+      socket.off('game:state', handler);
+      resolve(state);
+    };
+    socket.on('game:state', handler);
+  });
 }
 
 function waitForGameEvents(socket: ClientSocket): Promise<GameEvent[]> {
@@ -209,7 +226,10 @@ describe('multiplayer room + game wire protocol', () => {
       await sendIntent(human, { type: 'DRAW', playerId: 'player-1' });
 
       const eventsFromEndTurnOnward = waitForGameEvents(human);
-      const stateBackToHuman = waitForGameState(human);
+      // Bot actions now broadcast one game:state each as they're paced out, so this waits for
+      // the one where control has actually come back around to the human, not just the first
+      // state update after handing off to the bot.
+      const stateBackToHuman = waitForGameStateWhere(human, (state) => state.activePlayerIndex === 0);
       await sendIntent(human, { type: 'END_TURN', playerId: 'player-1' });
 
       const events = [...(await eventsFromDraw), ...(await eventsFromEndTurnOnward)];

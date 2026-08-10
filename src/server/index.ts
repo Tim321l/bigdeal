@@ -1,14 +1,14 @@
 import { createServer as createHttpServer, type IncomingMessage } from 'node:http';
 import { RoomManager } from './roomManager';
 import { createSocketServer } from './socketServer';
-import type { GameSocketServer } from './socketServer';
+import type { GameSocketServer, SocketServerOptions } from './socketServer';
 import { serveClientAsset } from './staticClient';
 import { toRoomSummary } from './types';
 
 export { RoomManager, MIN_PLAYERS, MAX_PLAYERS } from './roomManager';
 export { sanitizeStateFor } from './sanitize';
 export type { SanitizedGameState, SanitizedPlayer } from './sanitize';
-export { createSocketServer, type GameSocketServer } from './socketServer';
+export { createSocketServer, type GameSocketServer, type SocketServerOptions } from './socketServer';
 export * from './types';
 
 export interface RunningServer {
@@ -49,7 +49,7 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
 }
 
 /** Boots the HTTP + Socket.IO server. Pass port 0 to bind an OS-assigned ephemeral port (tests). */
-export function startServer(port = 3001): Promise<RunningServer> {
+export function startServer(port = 3001, socketOptions: SocketServerOptions = {}): Promise<RunningServer> {
   return new Promise((resolve) => {
     const roomManager = new RoomManager();
     const httpServer = createHttpServer((req, res) => {
@@ -135,7 +135,7 @@ export function startServer(port = 3001): Promise<RunningServer> {
       })();
     });
 
-    const io = createSocketServer(httpServer, roomManager);
+    const io = createSocketServer(httpServer, roomManager, socketOptions);
 
     httpServer.listen(port, () => {
       const address = httpServer.address();

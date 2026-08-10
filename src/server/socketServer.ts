@@ -46,7 +46,19 @@ const SPECTATOR_VIEWER_ID = '__spectator__';
 
 export type GameSocketServer = Server<ClientToServerEvents, ServerToClientEvents>;
 
-export function createSocketServer(httpServer: HttpServer, roomManager: RoomManager): GameSocketServer {
+export interface SocketServerOptions {
+  /** Delay between each individual bot action broadcast, so a human watching can actually follow
+   * along instead of an entire bot turn resolving instantly. Defaults to a human-legible pace;
+   * tests that drive a full bot-vs-human game over the wire pass 0 so they don't take minutes. */
+  botStepDelayMs?: number;
+}
+
+export function createSocketServer(
+  httpServer: HttpServer,
+  roomManager: RoomManager,
+  options: SocketServerOptions = {},
+): GameSocketServer {
+  const botStepDelayMs = options.botStepDelayMs ?? 700;
   const io: GameSocketServer = new Server(httpServer, {
     // Permissive for local development; tighten before deploying behind a real origin.
     cors: { origin: '*' },
@@ -78,24 +90,32 @@ export function createSocketServer(httpServer: HttpServer, roomManager: RoomMana
     }
   }
 
-  // processBotTurns caps how much work it does in one call so a degenerate room (e.g. every
-  // player just drawing 0 cards and ending their turn, in an exhausted-deck stretch) can't block
-  // the event loop for other rooms. Without resuming it, hitting that cap mid-bot-rotation left
-  // the game stuck forever on a bot's turn with nothing left to ever trigger another attempt —
-  // the client would just wait indefinitely for a turn that never came back around.
-  const MAX_BOT_CONTINUATION_CHAIN = 200;
+  // A human watching bot turns needs each individual action paced and broadcast on its own —
+  // resolving an entire bot rotation in one instant, unpaced burst (the old behavior) made it
+  // impossible to follow what just happened. This caps how many steps one continuation chain
+  // will take (matching processBotTurns' own MAX_BOT_STEPS bound) so a degenerate room (e.g.
+  // every player just drawing 0 cards in an exhausted-deck stretch) can't pace forever.
+  const MAX_BOT_CONTINUATION_CHAIN = 500;
 
-  /** Lets every bot whose turn it now is play out, resuming itself until a human needs to act
-   * or the game ends, then broadcasts everything that happened. */
-  function runBotsAndBroadcast(roomId: string, precedingEvents: GameEvent[] = [], chain = 0): void {
-    const botEvents = roomManager.processBotTurns(roomId);
-    const events = [...precedingEvents, ...botEvents];
-    if (events.length > 0) io.to(roomId).emit('game:events', events);
+  /** Broadcasts precedingEvents (typically the human action that just triggered this bot
+   * rotation) and the resulting state — unconditionally, since this is also what pushes the very
+   * first game:state out when a game starts with no bots at all and nothing else ever would —
+   * then steps through every bot decision that follows one at a time, each on its own timer and
+   * its own broadcast, until a human needs to act or the game ends. */
+  function runBotsAndBroadcast(roomId: string, precedingEvents: GameEvent[] = []): void {
+    if (precedingEvents.length > 0) io.to(roomId).emit('game:events', precedingEvents);
     broadcastGameState(roomId);
+    scheduleNextBotStep(roomId, 0);
+  }
 
-    if (roomManager.isBotTurn(roomId) && chain < MAX_BOT_CONTINUATION_CHAIN) {
-      setTimeout(() => runBotsAndBroadcast(roomId, [], chain + 1), 10);
-    }
+  function scheduleNextBotStep(roomId: string, chain: number): void {
+    if (!roomManager.isBotTurn(roomId) || chain >= MAX_BOT_CONTINUATION_CHAIN) return;
+    setTimeout(() => {
+      const events = roomManager.processSingleBotStep(roomId);
+      if (events && events.length > 0) io.to(roomId).emit('game:events', events);
+      broadcastGameState(roomId);
+      scheduleNextBotStep(roomId, chain + 1);
+    }, botStepDelayMs);
   }
 
   io.on('connection', (socket) => {

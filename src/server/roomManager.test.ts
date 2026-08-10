@@ -265,6 +265,41 @@ describe('bots', () => {
     expect(state?.activePlayerIndex === 0 || state?.phase === 'GAME_OVER').toBe(true);
   });
 
+  it('processSingleBotStep runs exactly one bot decision at a time, unlike processBotTurns', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    unwrap(manager.addBot(room.id, hostId, 2));
+    unwrap(manager.setReady(room.id, hostId, true));
+    unwrap(manager.submitIntent(room.id, hostId, { type: 'DRAW', playerId: 'player-1' }));
+    unwrap(manager.submitIntent(room.id, hostId, { type: 'END_TURN', playerId: 'player-1' }));
+
+    // A single step should never resolve the bot's whole turn on its own — draw alone is at
+    // least one action short of also playing/banking cards and ending the turn.
+    const firstStepEvents = manager.processSingleBotStep(room.id);
+    expect(firstStepEvents).not.toBeNull();
+    expect(manager.isBotTurn(room.id)).toBe(true);
+
+    // Stepping it out one at a time eventually reaches the same end point processBotTurns would
+    // reach in one call — driving it the rest of the way confirms nothing gets stuck mid-turn.
+    let steps = 0;
+    while (manager.isBotTurn(room.id) && steps < 50) {
+      manager.processSingleBotStep(room.id);
+      steps += 1;
+    }
+    expect(steps).toBeLessThan(50);
+    expect(manager.isBotTurn(room.id)).toBe(false);
+  });
+
+  it('processSingleBotStep returns null when it is not currently a bot turn', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    unwrap(manager.addBot(room.id, hostId, 2));
+    unwrap(manager.setReady(room.id, hostId, true));
+    // It's Alice's (the human's) turn first — nothing for a bot to step through yet.
+    expect(manager.processSingleBotStep(room.id)).toBeNull();
+    expect(manager.processSingleBotStep('NOSUCH')).toBeNull();
+  });
+
   it('never lets a bot submit an intent for someone else (defense in depth)', () => {
     const manager = new RoomManager();
     const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
