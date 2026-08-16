@@ -40,6 +40,10 @@ const BOSS_RAID_TURN_LIMIT = 15;
  * lands on — matching real Monopoly's starting cash rather than card-game Monopoly Deal's empty
  * start. $8M covers 2-3 of the cheapest tiles without affording the priciest ones outright. */
 const REAL_BIG_DEAL_STARTING_CASH = 8;
+/** Handed out as 8 separate $1M bills rather than one $8M bill — chargePlayer never gives change,
+ * so a single lump card would force paying (and losing) the whole $8M against even a $1M charge.
+ * $1M bills let a player pay any amount from $1M to $8M with no more than $1M lost to overpay. */
+const REAL_BIG_DEAL_STARTING_CASH_BILL = 1;
 
 function emptyField(): Record<PropertyColor, Card[]> {
   const field = {} as Record<PropertyColor, Card[]>;
@@ -74,12 +78,15 @@ export function initGame(playerNames: string[], seed: number, mode: GameMode = '
       if (card) player.hand.push(card);
     }
     if (mode === 'REAL_BIG_DEAL') {
-      player.bank.push({
-        id: `starting-cash-${player.id}`,
-        name: '起始資金',
-        type: 'MONEY',
-        value: REAL_BIG_DEAL_STARTING_CASH,
-      });
+      const billCount = REAL_BIG_DEAL_STARTING_CASH / REAL_BIG_DEAL_STARTING_CASH_BILL;
+      for (let i = 0; i < billCount; i++) {
+        player.bank.push({
+          id: `starting-cash-${player.id}-${i}`,
+          name: '起始資金 $1M',
+          type: 'MONEY',
+          value: REAL_BIG_DEAL_STARTING_CASH_BILL,
+        });
+      }
     }
   }
 

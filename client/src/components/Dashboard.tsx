@@ -271,7 +271,7 @@ export function Dashboard() {
                       <td>{player.bot ? '—' : (player.ip ?? '—')}</td>
                       <td>
                         <span className={`status-dot${player.connected ? ' status-dot--online' : ' status-dot--offline'}`} />
-                        {player.connected ? '已連線' : '斷咗線'}
+                        {player.kicked ? '已被踢走 · 電腦代打緊' : player.connected ? '已連線' : '斷咗線'}
                         {room.status === 'LOBBY' ? (player.ready ? ' · 已 Ready' : ' · 未 Ready') : ''}
                       </td>
                       <td>

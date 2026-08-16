@@ -69,6 +69,16 @@ describe('initGame', () => {
       expect(player.bank.reduce((sum, c) => sum + c.value, 0)).toBe(8);
     }
   });
+
+  it('splits REAL_BIG_DEAL starting cash into 8 separate $1M bills instead of one lump $8M card', () => {
+    // chargePlayer never gives change, so a single $8M bill would force overpaying (and losing)
+    // the whole thing against even a $1M charge — $1M bills let any amount 1-8 be paid exactly.
+    const state = initGame(['Alice', 'Bob'], 42, 'REAL_BIG_DEAL');
+    for (const player of state.players) {
+      expect(player.bank).toHaveLength(8);
+      expect(player.bank.every((c) => c.value === 1)).toBe(true);
+    }
+  });
 });
 
 describe('DRAW', () => {

@@ -13,6 +13,9 @@ const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_CODE_LENGTH = 6;
 /** Safety valve against a pathological bot-only loop never yielding to a human. */
 const MAX_BOT_STEPS = 500;
+/** Bot skill level used to auto-play a kicked player's remaining turns — they have no `bot` level
+ * of their own since they started as a real human seat. */
+const KICKED_PLAYER_BOT_LEVEL: BotLevel = 2;
 /** Ring-buffer cap for in-memory match history — oldest entries drop first. */
 const MAX_HISTORY = 50;
 
@@ -97,10 +100,12 @@ export class RoomManager {
    * Admin-dashboard-only: force a player out. In LOBBY this fully evicts them (same as
    * leaveRoom, host reassignment included) since a lingering disconnected seat would otherwise
    * block the room from ever starting. Mid-game there's no safe way to remove a seat without
-   * breaking the engine's positional gamePlayerId assumptions, so this just marks them
-   * disconnected instead — same effect as them dropping on their own. Either way the caller is
-   * responsible for actually severing their live socket connection (this method only updates
-   * room state); the returned socketId is who to disconnect.
+   * breaking the engine's positional gamePlayerId assumptions, so this marks them disconnected
+   * AND `kicked` — the latter is what tells isBotTurn/processSingleBotStep to auto-play their
+   * remaining turns via the bot AI instead of the game hanging forever waiting on a socket that,
+   * unlike an ordinary disconnect, is never coming back. Either way the caller is responsible for
+   * actually severing their live socket connection (this method only updates room state); the
+   * returned socketId is who to disconnect.
    */
   kickPlayer(roomId: string, lobbyId: string): RoomResult<{ room: Room | undefined; socketId: string | undefined }> {
     const room = this.rooms.get(roomId);
@@ -123,6 +128,7 @@ export class RoomManager {
 
     player.connected = false;
     player.socketId = undefined;
+    player.kicked = true;
     return ok({ room, socketId });
   }
 
@@ -284,9 +290,9 @@ export class RoomManager {
     const actorId = this.currentActorId(room.gameState);
     if (!actorId) return null;
     const actor = room.players.find((p) => p.gamePlayerId === actorId);
-    if (!actor?.bot) return null;
+    if (!actor || (!actor.bot && !actor.kicked)) return null;
 
-    const action = decideBotAction(room.gameState, actorId, actor.bot.level);
+    const action = decideBotAction(room.gameState, actorId, actor.bot?.level ?? KICKED_PLAYER_BOT_LEVEL);
     const { nextState, events } = applyAction(room.gameState, action);
     room.gameState = nextState;
     if (nextState.phase === 'GAME_OVER') {
@@ -328,17 +334,19 @@ export class RoomManager {
   }
 
   /**
-   * True if whoever needs to act right now (turn or reaction) is a bot. processBotTurns caps how
-   * much work it does per call (MAX_BOT_STEPS) so one degenerate room can't block the event loop
-   * for other rooms — callers use this to know whether to invoke it again to keep going, rather
-   * than assuming one call always reaches a human's turn or the game's end.
+   * True if whoever needs to act right now (turn or reaction) is a bot, or a kicked seat standing
+   * in for one (see kickPlayer). processBotTurns caps how much work it does per call
+   * (MAX_BOT_STEPS) so one degenerate room can't block the event loop for other rooms — callers
+   * use this to know whether to invoke it again to keep going, rather than assuming one call
+   * always reaches a human's turn or the game's end.
    */
   isBotTurn(roomId: string): boolean {
     const room = this.rooms.get(roomId);
     if (!room || room.status !== 'IN_PROGRESS' || !room.gameState) return false;
     const actorId = this.currentActorId(room.gameState);
     if (!actorId) return false;
-    return !!room.players.find((p) => p.gamePlayerId === actorId)?.bot;
+    const actor = room.players.find((p) => p.gamePlayerId === actorId);
+    return !!actor?.bot || !!actor?.kicked;
   }
 
   private currentActorId(state: GameState): string | undefined {

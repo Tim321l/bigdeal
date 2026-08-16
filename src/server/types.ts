@@ -17,6 +17,10 @@ export interface RoomPlayer {
   gamePlayerId?: string | undefined;
   /** Present only for bot seats — no real socket ever connects for these. */
   bot?: { level: BotLevel } | undefined;
+  /** Set when an admin kicks this player mid-game (never by an ordinary disconnect, which is
+   * expected to reconnect). A kicked seat is never coming back, so its turns are auto-played by
+   * the bot AI instead of hanging the game forever waiting for a socket that will never return. */
+  kicked?: boolean | undefined;
   /** socket.handshake.address at join/reconnect time — admin-dashboard-only, never included in
    * RoomSummary/PublicRoomPlayer (other players must never see each other's IP). */
   ip?: string | undefined;
@@ -94,6 +98,7 @@ export interface AdminPlayer {
   connected: boolean;
   gamePlayerId?: string | undefined;
   bot?: { level: BotLevel } | undefined;
+  kicked?: boolean | undefined;
 }
 
 export interface AdminRoomSummary {
@@ -121,6 +126,7 @@ export function toAdminRoomSummary(room: Room): AdminRoomSummary {
       connected: player.connected,
       gamePlayerId: player.gamePlayerId,
       bot: player.bot,
+      kicked: player.kicked,
     })),
     spectatorCount: room.spectatorSocketIds.size,
   };

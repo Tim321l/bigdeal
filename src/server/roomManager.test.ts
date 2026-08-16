@@ -491,6 +491,26 @@ describe('kickPlayer (admin dashboard)', () => {
     expect(manager.kickPlayer('NOSUCH', 'whatever')).toEqual({ ok: false, error: 'Room not found.' });
     expect(manager.kickPlayer(room.id, 'nobody')).toEqual({ ok: false, error: 'That player is not in this room.' });
   });
+
+  it('auto-plays a kicked mid-game player\'s turns via the bot AI instead of hanging the game forever', () => {
+    const manager = new RoomManager();
+    const { room, lobbyId: hostId } = unwrap(manager.createRoom('Alice', 'socket-alice'));
+    unwrap(manager.addBot(room.id, hostId, 2));
+    unwrap(manager.setReady(room.id, hostId, true));
+
+    // Alice (a real human seat) goes first — not yet a bot turn.
+    expect(manager.isBotTurn(room.id)).toBe(false);
+
+    unwrap(manager.kickPlayer(room.id, hostId));
+
+    // Kicked mid-game: her seat is never coming back, so her turn is now auto-playable.
+    const kickedPlayer = manager.getRoom(room.id)?.players.find((p) => p.lobbyId === hostId);
+    expect(kickedPlayer?.kicked).toBe(true);
+    expect(manager.isBotTurn(room.id)).toBe(true);
+
+    const events = manager.processSingleBotStep(room.id);
+    expect(events).not.toBeNull();
+  });
 });
 
 describe('closeRoom (admin dashboard)', () => {
