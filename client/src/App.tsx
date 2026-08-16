@@ -1,10 +1,13 @@
 import { Dashboard } from './components/Dashboard';
 import { GameBoard } from './components/GameBoard';
 import { LandingScreen } from './components/LandingScreen';
+import { ThemeToggle } from './components/ThemeToggle';
 import { WaitingRoom } from './components/WaitingRoom';
 import { useGameConnection } from './hooks/useGameConnection';
+import { useTheme } from './hooks/useTheme';
 
 export default function App() {
+  const [theme, toggleTheme] = useTheme();
   const {
     status,
     room,
@@ -28,7 +31,12 @@ export default function App() {
   } = useGameConnection();
 
   if (window.location.pathname === '/dashboard') {
-    return <Dashboard />;
+    return (
+      <>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        <Dashboard />
+      </>
+    );
   }
 
   const content =
@@ -60,6 +68,7 @@ export default function App() {
 
   return (
     <>
+      <ThemeToggle theme={theme} onToggle={toggleTheme} />
       {status !== 'connected' && (
         <div className="connection-banner">
           {status === 'connecting' ? '連緊線…' : '同伺服器斷咗線,嘗試重新連接…'}
